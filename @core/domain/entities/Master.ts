@@ -82,7 +82,7 @@ export default class Master implements IMasterEntity {
     this.contents = contents?.map((content) => Content.create(content));
     this.projects = projects?.map((project) => Project.create(project));
     this.agents = agents?.map((agent) => Agent.create(agent));
-    this.cards = cards?.map((card) => Card.create(card));
+    this.cards = cards?.map((card) => Card.create(card)) || [];
     this.status = status || this.getStatus(this.contents);
   }
 
@@ -133,20 +133,41 @@ export default class Master implements IMasterEntity {
   }
 
   public upsertCards(cards?: Card[]): Card[] {
-    const alreadyCreatedCards = cards || this.cards;
+    if (cards) {
+      cards?.forEach((card) => {
+        const findedCard = this.cards?.some(
+          (masterStoredCard) => masterStoredCard.id === card.id
+        );
 
-    if (alreadyCreatedCards) return this.updateCards(alreadyCreatedCards);
+        if (!findedCard)
+          !this.cards?.length ? (this.cards = [card]) : this.cards.push(card);
 
+        this.updateCard(card);
+      });
+
+      return this.cards || [];
+    }
+
+    /* const findedContentsOfThisCard = structuredContentsByPlanner.find(
+      (structuredContent) => structuredContent.plannerId === card.planId
+    ); */
+
+    return this.cards || [];
+  }
+
+  private getMissingContentsByPlanner() {
     const plannerIds = this.getContentsPlannerIds();
 
-    const contents = this.getMissingContents();
+    const missingContents = this.getMissingContents();
 
-    const contentsFilteredByPlanner = plannerIds.map((plannerId) => ({
-      id: plannerId,
-      contents: contents?.filter(
+    const structuredContentsByPlanner = plannerIds.map((plannerId) => ({
+      plannerId,
+      contents: missingContents?.filter(
         (content) => content.plannerUuid === plannerId
       ),
     }));
+
+    return structuredContentsByPlanner ?? [];
   }
 
   public toJSON(): IMasterEntity {
@@ -173,7 +194,7 @@ export default class Master implements IMasterEntity {
     );
   }
 
-  private updateCards(cards: Card[]): Card[] {}
+  private updateCard(card: Card): Card {}
 
   private getContentsPlannerIds() {
     const missingContents = this.getMissingContents();
