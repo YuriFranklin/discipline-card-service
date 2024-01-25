@@ -1,5 +1,11 @@
 import { ZodError, z } from "zod";
-import { STATUS } from "../constants/status";
+import { STATUS } from "../constants/Status";
+
+type ContentEntityStatus = Exclude<STATUS, STATUS.INCOMPLETE>;
+
+const isValidStatus = (value: any): value is ContentEntityStatus => {
+  return [STATUS.MISSING, STATUS.OK, STATUS.NOT_APPLICABLE].includes(value);
+};
 
 export interface IContentEntity {
   uuid: string;
@@ -7,7 +13,7 @@ export interface IContentEntity {
   title: string;
   plannerUuid?: string;
   bucketUuid?: string;
-  status?: STATUS;
+  status?: ContentEntityStatus;
 }
 
 export const contentSchema = z.object({
@@ -16,7 +22,11 @@ export const contentSchema = z.object({
   title: z.string(),
   plannerUuid: z.string().optional(),
   bucketUuid: z.string().optional(),
-  status: z.nativeEnum(STATUS).optional(),
+  status: z
+    .custom((value) =>
+      isValidStatus(value) ? value : { message: "Invalid status" }
+    )
+    .optional(),
 });
 
 export default class Content implements IContentEntity {
@@ -25,7 +35,7 @@ export default class Content implements IContentEntity {
   title: string;
   plannerUuid?: string | undefined;
   bucketUuid?: string | undefined;
-  status?: STATUS;
+  status?: ContentEntityStatus;
 
   private constructor(props: IContentEntity) {
     const { uuid, columnName, title, plannerUuid, bucketUuid, status } = props;

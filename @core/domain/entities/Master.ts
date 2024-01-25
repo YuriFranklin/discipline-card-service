@@ -3,7 +3,8 @@ import Publisher, { IPublisherEntity, publisherSchema } from "./Publisher";
 import Content, { IContentEntity, contentSchema } from "./Content";
 import Agent, { IAgentEntity, agentSchema } from "./Agent";
 import Project, { IProjectEntity, projectSchema } from "./Project";
-import { STATUS } from "../constants/status";
+import Card, { ICardEntity, cardSchema } from "./Card";
+import { STATUS } from "../constants/Status";
 
 interface IMasterEntity {
   discipline: string;
@@ -18,6 +19,7 @@ interface IMasterEntity {
   projects?: IProjectEntity[];
   agents?: IAgentEntity[];
   status?: STATUS;
+  cards?: ICardEntity[];
 }
 
 const masterSchema = z.object({
@@ -33,6 +35,7 @@ const masterSchema = z.object({
   projects: z.array(projectSchema).optional(),
   agents: z.array(agentSchema).optional(),
   status: z.nativeEnum(STATUS).optional(),
+  cards: z.array(cardSchema).optional(),
 });
 
 export default class Master implements IMasterEntity {
@@ -48,6 +51,7 @@ export default class Master implements IMasterEntity {
   projects?: Project[] | undefined;
   agents?: Agent[] | undefined;
   status?: STATUS;
+  cards?: Card[];
 
   private constructor(props: IMasterEntity) {
     const {
@@ -63,6 +67,7 @@ export default class Master implements IMasterEntity {
       projects,
       agents,
       status,
+      cards,
     } = props;
 
     this.discipline = discipline;
@@ -77,6 +82,7 @@ export default class Master implements IMasterEntity {
     this.contents = contents?.map((content) => Content.create(content));
     this.projects = projects?.map((project) => Project.create(project));
     this.agents = agents?.map((agent) => Agent.create(agent));
+    this.cards = cards?.map((card) => Card.create(card));
     this.status = status || this.getStatus(this.contents);
   }
 
@@ -126,6 +132,23 @@ export default class Master implements IMasterEntity {
     return undefined;
   }
 
+  public upsertCards(cards?: Card[]): Card[] {
+    const alreadyCreatedCards = cards || this.cards;
+
+    if (alreadyCreatedCards) return this.updateCards(alreadyCreatedCards);
+
+    const plannerIds = this.getContentsPlannerIds();
+
+    const contents = this.getMissingContents();
+
+    const contentsFilteredByPlanner = plannerIds.map((plannerId) => ({
+      id: plannerId,
+      contents: contents?.filter(
+        (content) => content.plannerUuid === plannerId
+      ),
+    }));
+  }
+
   public toJSON(): IMasterEntity {
     return {
       discipline: this.discipline,
@@ -139,7 +162,30 @@ export default class Master implements IMasterEntity {
       contents: this.contents?.map((content) => content.toJSON()),
       projects: this.projects?.map((project) => project.toJSON()),
       agents: this.agents?.map((agent) => agent.toJSON()),
+      cards: this.cards?.map((card) => card.toJSON()),
       status: this.getStatus(),
     };
+  }
+
+  private getMissingContents() {
+    return this.contents?.filter(
+      (content) => content?.status === STATUS.MISSING
+    );
+  }
+
+  private updateCards(cards: Card[]): Card[] {}
+
+  private getContentsPlannerIds() {
+    const missingContents = this.getMissingContents();
+
+    const plannerIds =
+      missingContents?.reduce((planners, card) => {
+        if (card.plannerUuid) {
+          planners.push(card.plannerUuid);
+        }
+        return planners;
+      }, [] as string[]) || [];
+
+    return plannerIds;
   }
 }
