@@ -1,7 +1,7 @@
 import { ZodError, z } from "zod";
 import Bucket, { IBucketEntity, bucketSchema } from "./Bucket";
 
-interface IPlannerEntity {
+export interface IPlannerEntity {
   uuid: string;
   groupId: string;
   name: string;

@@ -6,7 +6,7 @@ import Project, { IProjectEntity, projectSchema } from "./Project";
 import Card, { ICardEntity, cardSchema } from "./Card";
 import { STATUS } from "../constants/Status";
 
-interface IMasterEntity {
+export interface IMasterEntity {
   discipline: string;
   equivalences?: string[];
   masterPublisher?: IPublisherEntity;
@@ -132,44 +132,6 @@ export default class Master implements IMasterEntity {
     return undefined;
   }
 
-  public upsertCards(cards?: Card[]): Card[] {
-    if (cards) {
-      cards?.forEach((card) => {
-        const findedCard = this.cards?.some(
-          (masterStoredCard) => masterStoredCard.id === card.id
-        );
-
-        if (!findedCard)
-          !this.cards?.length ? (this.cards = [card]) : this.cards.push(card);
-
-        this.updateCard(card);
-      });
-
-      return this.cards || [];
-    }
-
-    /* const findedContentsOfThisCard = structuredContentsByPlanner.find(
-      (structuredContent) => structuredContent.plannerId === card.planId
-    ); */
-
-    return this.cards || [];
-  }
-
-  private getMissingContentsByPlanner() {
-    const plannerIds = this.getContentsPlannerIds();
-
-    const missingContents = this.getMissingContents();
-
-    const structuredContentsByPlanner = plannerIds.map((plannerId) => ({
-      plannerId,
-      contents: missingContents?.filter(
-        (content) => content.plannerUuid === plannerId
-      ),
-    }));
-
-    return structuredContentsByPlanner ?? [];
-  }
-
   public toJSON(): IMasterEntity {
     return {
       discipline: this.discipline,
@@ -186,27 +148,5 @@ export default class Master implements IMasterEntity {
       cards: this.cards?.map((card) => card.toJSON()),
       status: this.getStatus(),
     };
-  }
-
-  private getMissingContents() {
-    return this.contents?.filter(
-      (content) => content?.status === STATUS.MISSING
-    );
-  }
-
-  private updateCard(card: Card): Card {}
-
-  private getContentsPlannerIds() {
-    const missingContents = this.getMissingContents();
-
-    const plannerIds =
-      missingContents?.reduce((planners, card) => {
-        if (card.plannerUuid) {
-          planners.push(card.plannerUuid);
-        }
-        return planners;
-      }, [] as string[]) || [];
-
-    return plannerIds;
   }
 }
