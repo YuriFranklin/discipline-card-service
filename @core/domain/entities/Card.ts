@@ -19,6 +19,7 @@ export interface ICardEntity {
 export interface ICheckItem {
   id: string;
   notifiedDate?: Date;
+  contentUuid: string;
   bucketId: string;
   value: {
     title: string;
@@ -41,6 +42,7 @@ export const cardSchema = z.object({
       z.object({
         id: z.string(),
         notifiedDate: z.date().optional(),
+        contentUuid: z.string(),
         bucketId: z.string(),
         value: z.object({
           title: z.string(),

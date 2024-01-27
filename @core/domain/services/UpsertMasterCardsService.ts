@@ -19,52 +19,46 @@ export default class UpsertMasterCardsService {
 
         if (!findedCard) return upsertedCards.push(card.toJSON());
 
-        upsertedCards.push(this.updateCard(findedCard, card.toJSON()));
+        upsertedCards.push(
+          this.compareAndUpdateCard(findedCard, card.toJSON())
+        );
       });
 
       return Master.create({ ...masterAsJSON, cards: upsertedCards });
     }
 
-    const missingContentsByPlanner = this.getMissingContentsByPlanner(
-      masterAsJSON
-    ).filter((contents) => !!contents.contents?.length) as {
-      plannerId: string;
-      contents: IContentEntity[];
-    }[];
+    const contentsByPlannersIds = this.getContentsByPlannerIds(
+      master.contents || []
+    );
 
-    const cardsUpserted = missingContentsByPlanner.map((contentsPlanner) => {
+    const upsertedCards = contentsByPlannersIds.map((contentsByPlannerId) => {
       const card = masterAsJSON.cards?.find(
-        (card) => card.planId === contentsPlanner.plannerId
+        (card) => card.planId === contentsByPlannerId.plannerId
       );
 
-      if (card)
-        return this.compareCardChecklistWithContentsAndUpdate(
-          card,
-          contentsPlanner
-        );
+      if (card) return this.updateCard(masterAsJSON, planners, card);
 
       return this.createCard(
         masterAsJSON,
         plannersAsJSON,
-        contentsPlanner.contents
+        contentsByPlannerId.contents
       );
     });
 
-    const missingPlannerIds = this.getContentsPlannerIds(
-      masterAsJSON.contents || []
-    );
-
-    const alreadyFinishedCards = master.cards?.filter(
-      (card) => !missingPlannerIds.some((id) => id === card.planId)
-    );
+    return Master.create({
+      ...masterAsJSON,
+      cards: upsertedCards,
+    });
   }
 
   private compareCardChecklistWithContentsAndUpdate(
     card: ICardEntity,
     contentsPlanner: { plannerId: string; contents: IContentEntity[] }
-  ): ICardEntity {}
+  ): ICardEntity {
+    throw new Error("method not implemented yet");
+  }
 
-  private getMissingContentsByPlanner(master: IMasterEntity): {
+  /*   private getMissingContentsByPlanner(master: IMasterEntity): {
     plannerId: string;
     contents: IContentEntity[];
   }[] {
@@ -80,34 +74,131 @@ export default class UpsertMasterCardsService {
     }));
 
     return structuredContentsByPlanner ?? [];
-  }
+  } */
 
   private getMissingContents(contents: IContentEntity[]) {
     return contents?.filter((content) => content?.status === STATUS.MISSING);
   }
 
-  private updateCard(
+  private compareAndUpdateCard(
     oldCard: ICardEntity,
     currentCard: ICardEntity
-  ): ICardEntity {}
+  ): ICardEntity {
+    throw new Error("method not implemented yet");
+  }
 
   private createCard(
     master: IMasterEntity,
     planners: IPlannerEntity[],
     contents: IContentEntity[]
-  ): ICardEntity {}
+  ): ICardEntity {
+    throw new Error("method not implemented yet");
+  }
 
-  private getContentsPlannerIds(contents: IContentEntity[]): string[] {
-    const missingContents = this.getMissingContents(contents);
+  private updateCard(
+    master: IMasterEntity,
+    planners: IPlannerEntity[],
+    card: ICardEntity
+  ): ICardEntity {
+    const planner = planners.find((planner) => planner.uuid === card.planId);
 
+    if (!planner) throw new Error(`Planner not found for card ${card.id}`);
+
+    const checklist = this.upsertChecklist(master, card, planner);
+
+    throw new Error("method under implementation");
+  }
+
+  private upsertChecklist(
+    master: IMasterEntity,
+    card: ICardEntity,
+    planner: IPlannerEntity
+  ) {
+    const defaultBucketId = planner.buckets?.find(
+      (bucket) => bucket.isDefault
+    )?.uuid;
+
+    if (!defaultBucketId)
+      throw new Error(`Planner hasn't a default bucket ${planner.uuid}`);
+
+    const contents = master.contents?.filter(
+      (content) => content.plannerUuid === card.planId
+    );
+
+    const updatedCardCheckItems =
+      card.checklist?.map((checkItem) => {
+        const checkItemContent = contents?.find(
+          (content) => content.uuid === checkItem.contentUuid
+        );
+
+        if (checkItemContent) {
+          const isChecked = () => {
+            switch (checkItemContent.status) {
+              case STATUS.MISSING || STATUS.INCOMPLETE:
+                return false;
+              default:
+                return true;
+            }
+          };
+
+          return {
+            ...checkItem,
+            bucketId: checkItemContent.bucketUuid || defaultBucketId,
+            id: checkItemContent.uuid,
+            contentUuid: checkItemContent.uuid,
+            value: {
+              ...checkItem.value,
+              title: checkItemContent.title,
+              isChecked: isChecked(),
+            },
+          };
+        }
+
+        return {
+          ...checkItem,
+          value: {
+            ...checkItem.value,
+            title: `${checkItem.value.title} (Item não localizado)`,
+            isChecked: true,
+          },
+        };
+      }) || [];
+
+    const newCheckItems =
+      contents
+        ?.filter(
+          (content) =>
+            !card.checklist?.some(
+              (checkItem) => checkItem.contentUuid === content.uuid
+            ) && content.status === STATUS.MISSING
+        )
+        .map((content) => ({
+          id: content.uuid,
+          contentUuid: content.uuid,
+          bucketId: content.bucketUuid || defaultBucketId,
+          value: {
+            title: content.title,
+            isChecked: false,
+          },
+        })) || [];
+
+    return [...updatedCardCheckItems, ...newCheckItems];
+  }
+
+  private getContentsByPlannerIds(contents: IContentEntity[]) {
     const plannerIds =
-      missingContents?.reduce((planners, card) => {
+      contents?.reduce((planners, card) => {
         if (card.plannerUuid) {
           planners.push(card.plannerUuid);
         }
         return planners;
       }, [] as string[]) || [];
 
-    return plannerIds;
+    const contentsAsPlannerIds = plannerIds.map((plannerId) => ({
+      plannerId,
+      contents: contents.filter((content) => content.plannerUuid === plannerId),
+    }));
+
+    return contentsAsPlannerIds;
   }
 }
