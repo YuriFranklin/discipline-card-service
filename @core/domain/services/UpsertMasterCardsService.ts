@@ -106,7 +106,25 @@ export default class UpsertMasterCardsService {
 
     const checklist = this.upsertChecklist(master, card, planner);
 
-    throw new Error("method under implementation");
+    const today = new Date();
+
+    const sortedProjects = master?.projects
+      ?.filter((project) => {
+        const projectStartDate = project.startDate
+          ? new Date(project.startDate)
+          : new Date();
+        return projectStartDate <= today;
+      })
+      .sort((a, b) => {
+        const startDateA = a.startDate ? new Date(a.startDate) : new Date();
+        const startDateB = b.startDate ? new Date(b.startDate) : new Date();
+        return startDateA.getTime() - startDateB.getTime();
+      });
+
+    return {
+      ...card,
+      title: `[PENDÊNCIA] [${master.uuid}] ${master.discipline}`,
+    };
   }
 
   private upsertChecklist(

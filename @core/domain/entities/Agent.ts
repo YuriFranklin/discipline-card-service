@@ -7,7 +7,7 @@ export const agentSchema = z.object({
   alias: z.string(),
   name: z.string(),
   email: z.string(),
-  isLeader: z.string(),
+  isLeader: z.boolean(),
   includeOnAllCardsPlanner: z.boolean().optional(),
   plannersToInclude: z.array(z.string()).optional(),
 });
@@ -17,7 +17,7 @@ export default class Agent implements IAgentEntity {
   alias: string;
   name: string;
   email: string;
-  isLeader: string;
+  isLeader: boolean;
   includeOnAllCardsPlanner?: boolean | undefined;
   plannersToInclude?: string[] | undefined;
 
