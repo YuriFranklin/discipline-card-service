@@ -1,27 +1,15 @@
 import { ZodError, z } from "zod";
-import Tag, { ITagEntity, tagSchema } from "./Tag";
-import Agent, { IAgentEntity, agentSchema } from "./Agent";
-import Chat, { IChatEntity, chatSchema } from "./Chat";
+import Tag, { tagSchema } from "./Tag";
+import Agent, { agentSchema } from "./Agent";
+import Chat, { chatSchema } from "./Chat";
 
-export interface IProjectEntity {
-  uuid: string;
-  name: string;
-  identifier: string;
-  agentColumn?: string;
-  statusColumn: string;
-  startDate?: Date;
-  endDate?: Date;
-  module: string & { length: 1 | 2 };
-  tags?: ITagEntity[];
-  agents?: IAgentEntity[];
-  chats?: IChatEntity[];
-}
+export type IProjectEntity = z.infer<typeof projectSchema>;
 
 const refineModule = (value: string) =>
   typeof value === "string" && (value.length === 1 || value.length === 2);
 
 export const projectSchema = z.object({
-  uuid: z.string(),
+  uuid: z.string().optional(),
   name: z.string(),
   identifier: z.string(),
   agentColumn: z.string().optional(),
@@ -36,18 +24,18 @@ export const projectSchema = z.object({
   chats: z.array(chatSchema).optional(),
 });
 
-export default class Project implements IProjectEntity {
-  uuid: string;
-  name: string;
-  identifier: string;
-  agentColumn?: string | undefined;
-  statusColumn: string;
-  startDate?: Date | undefined;
-  endDate?: Date | undefined;
-  module: string & { length: 1 | 2 };
-  tags?: Tag[] | undefined;
-  agents?: Agent[] | undefined;
-  chats?: Chat[] | undefined;
+export default class Project {
+  private uuid: string;
+  private name: string;
+  private identifier: string;
+  private agentColumn?: string | undefined;
+  private statusColumn: string;
+  private startDate?: Date | undefined;
+  private endDate?: Date | undefined;
+  private module: string;
+  private tags?: Tag[] | undefined;
+  private agents?: Agent[] | undefined;
+  private chats?: Chat[] | undefined;
 
   constructor(props: IProjectEntity) {
     const {
@@ -64,7 +52,7 @@ export default class Project implements IProjectEntity {
       chats,
     } = props;
 
-    this.uuid = uuid;
+    this.uuid = uuid || crypto.randomUUID();
     this.name = name;
     this.identifier = identifier;
     this.agentColumn = agentColumn;
@@ -91,19 +79,21 @@ export default class Project implements IProjectEntity {
     }
   }
 
-  public toJSON(): IProjectEntity {
+  public toJSON(): IProjectEntity | { startDate?: string; endDate?: string } {
     return {
       uuid: this.uuid,
       name: this.name,
       identifier: this.identifier,
-      agentColumn: this.agentColumn,
+      ...(this.agentColumn && { agentColumn: this.agentColumn }),
       statusColumn: this.statusColumn,
-      startDate: this.startDate,
-      endDate: this.endDate,
+      ...(this.startDate && { startDate: this.startDate.toISOString() }),
+      ...(this.endDate && { endDate: this.endDate.toISOString() }),
       module: this.module,
-      tags: this.tags?.map((tag) => tag.toJSON()),
-      agents: this.agents?.map((agent) => agent.toJSON()),
-      chats: this.chats?.map((chat) => chat.toJSON()),
+      ...(this.tags?.length && { tags: this.tags?.map((tag) => tag.toJSON()) }),
+      ...(this.agents?.length && {
+        agents: this.agents?.map((agent) => agent.toJSON()),
+      }),
+      ...(this.chats && { chats: this.chats?.map((chat) => chat.toJSON()) }),
     };
   }
 }

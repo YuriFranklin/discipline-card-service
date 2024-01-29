@@ -1,35 +1,31 @@
 import { ZodError, z } from "zod";
-import Tag, { ITagEntity, tagSchema } from "./Tag";
+import Tag, { tagSchema } from "./Tag";
+import crypto from "crypto";
 
-export interface IPublisherEntity {
-  uuid: string;
-  name: string;
-  slug?: string[];
-  tags: ITagEntity[];
-}
+export type IPublisherEntity = z.infer<typeof publisherSchema>;
 
 export const publisherSchema = z.object({
-  uuid: z.string(),
+  uuid: z.string().optional(),
   name: z.string(),
   slug: z.array(z.string()).optional(),
   tags: z.array(tagSchema),
 });
 
-export default class Publisher implements IPublisherEntity {
-  uuid: string;
-  name: string;
-  slug?: string[] | undefined;
-  tags: Tag[];
+export default class Publisher {
+  private uuid: string;
+  private name: string;
+  private slug?: string[] | undefined;
+  private tags: Tag[];
 
-  constructor(props: IPublisherEntity) {
+  constructor(props: Optional<IPublisherEntity, "uuid">) {
     const { uuid, name, slug, tags } = props;
-    this.uuid = uuid;
+    this.uuid = uuid || crypto.randomUUID();
     this.name = name;
     this.slug = slug;
-    this.tags = tags.map((tag) => new Tag(tag));
+    this.tags = tags.map((tag) => Tag.create(tag));
   }
 
-  public static create(data: IPublisherEntity): Publisher {
+  public static create(data: Optional<IPublisherEntity, "uuid">): Publisher {
     try {
       publisherSchema.parse(data);
       return new Publisher(data);
@@ -47,7 +43,7 @@ export default class Publisher implements IPublisherEntity {
     return {
       uuid: this.uuid,
       name: this.name,
-      slug: this.slug,
+      ...(this.slug?.length && { slug: this.slug }),
       tags: this.tags.map((tag) => tag.toJSON()),
     };
   }

@@ -1,25 +1,20 @@
 import { ZodError, z } from "zod";
-import Bucket, { IBucketEntity, bucketSchema } from "./Bucket";
+import Bucket, { bucketSchema } from "./Bucket";
 
-export interface IPlannerEntity {
-  uuid: string;
-  groupId: string;
-  name: string;
-  buckets?: IBucketEntity[];
-}
+export type IPlannerEntity = z.infer<typeof plannerSchema>;
 
-const plannerSchema = z.object({
+export const plannerSchema = z.object({
   uuid: z.string(),
   groupId: z.string(),
   name: z.string(),
   buckets: z.array(bucketSchema).optional(),
 });
 
-export default class Planner implements IPlannerEntity {
-  uuid: string;
-  groupId: string;
-  name: string;
-  buckets?: Bucket[] | undefined;
+export default class Planner {
+  private uuid: string;
+  private groupId: string;
+  private name: string;
+  private buckets?: Bucket[] | undefined;
 
   private constructor(props: IPlannerEntity) {
     const { uuid, groupId, name, buckets } = props;
@@ -49,7 +44,9 @@ export default class Planner implements IPlannerEntity {
       uuid: this.uuid,
       groupId: this.groupId,
       name: this.name,
-      buckets: this.buckets?.map((bucket) => bucket.toJSON()),
+      ...(this.buckets?.length && {
+        buckets: this.buckets?.map((bucket) => bucket.toJSON()),
+      }),
     };
   }
 }

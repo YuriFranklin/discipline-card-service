@@ -1,26 +1,12 @@
 import { ZodError, z } from "zod";
-import Publisher, { IPublisherEntity, publisherSchema } from "./Publisher";
+import Publisher, { publisherSchema } from "./Publisher";
 import Content, { IContentEntity, contentSchema } from "./Content";
-import Agent, { IAgentEntity, agentSchema } from "./Agent";
-import Project, { IProjectEntity, projectSchema } from "./Project";
-import Card, { ICardEntity, cardSchema } from "./Card";
+import Agent, { agentSchema } from "./Agent";
+import Project, { projectSchema } from "./Project";
+import Card, { cardSchema } from "./Card";
 import { STATUS } from "../constants/Status";
 
-export interface IMasterEntity {
-  discipline: string;
-  equivalences?: string[];
-  masterPublisher?: IPublisherEntity;
-  productionPublisher?: IPublisherEntity;
-  isFirstPeriod: boolean;
-  masterId?: number;
-  uuid?: string;
-  semester: string;
-  contents?: IContentEntity[];
-  projects?: IProjectEntity[];
-  agents?: IAgentEntity[];
-  status?: STATUS;
-  cards?: ICardEntity[];
-}
+export type IMasterEntity = z.infer<typeof masterSchema>;
 
 const masterSchema = z.object({
   discipline: z.string(),
@@ -38,20 +24,20 @@ const masterSchema = z.object({
   cards: z.array(cardSchema).optional(),
 });
 
-export default class Master implements IMasterEntity {
-  discipline: string;
-  equivalences?: string[] | undefined;
-  masterPublisher?: Publisher | undefined;
-  productionPublisher?: Publisher | undefined;
-  isFirstPeriod: boolean;
-  masterId?: number | undefined;
-  uuid?: string | undefined;
-  semester: string;
-  contents?: Content[] | undefined;
-  projects?: Project[] | undefined;
-  agents?: Agent[] | undefined;
-  status?: STATUS;
-  cards?: Card[];
+export default class Master {
+  private discipline: string;
+  private equivalences?: string[] | undefined;
+  private masterPublisher?: Publisher | undefined;
+  private productionPublisher?: Publisher | undefined;
+  private isFirstPeriod: boolean;
+  private masterId?: number | undefined;
+  private uuid?: string | undefined;
+  private semester: string;
+  private contents?: Content[] | undefined;
+  private projects?: Project[] | undefined;
+  private agents?: Agent[] | undefined;
+  private status?: STATUS;
+  private cards?: Card[];
 
   private constructor(props: IMasterEntity) {
     const {
@@ -79,7 +65,9 @@ export default class Master implements IMasterEntity {
     this.masterId = masterId;
     this.uuid = uuid;
     this.semester = semester;
-    this.contents = contents?.map((content) => Content.create(content));
+    this.contents = contents?.map((content: IContentEntity) =>
+      Content.create(content)
+    );
     this.projects = projects?.map((project) => Project.create(project));
     this.agents = agents?.map((agent) => Agent.create(agent));
     this.cards = cards?.map((card) => Card.create(card)) || [];
@@ -101,7 +89,9 @@ export default class Master implements IMasterEntity {
   }
 
   public getStatus(contents?: Content[]): STATUS | undefined {
-    const scopedContents = contents || this.contents;
+    const scopedContents =
+      contents?.map((content) => content.toJSON()) ||
+      this.contents?.map((content) => content.toJSON());
 
     const missingContents =
       scopedContents?.filter((content) => content.status === STATUS.MISSING) ||

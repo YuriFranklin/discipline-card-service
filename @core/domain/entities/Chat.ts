@@ -1,10 +1,6 @@
 import { ZodError, z } from "zod";
 
-export interface IChatEntity {
-  uuid: string;
-  name: string;
-  isDefault: boolean;
-}
+export type IChatEntity = z.infer<typeof chatSchema>;
 
 export const chatSchema = z.object({
   uuid: z.string(),
@@ -12,10 +8,10 @@ export const chatSchema = z.object({
   isDefault: z.boolean(),
 });
 
-export default class Chat implements IChatEntity {
-  uuid: string;
-  name: string;
-  isDefault: boolean;
+export default class Chat {
+  private uuid: string;
+  private name: string;
+  private isDefault: boolean;
 
   private constructor(props: IChatEntity) {
     const { uuid, name, isDefault } = props;

@@ -1,12 +1,6 @@
 import { ZodError, z } from "zod";
 
-export interface IBucketEntity {
-  uuid: string;
-  name: string;
-  isDefault?: boolean;
-  isSolvedBucked?: boolean;
-  isSolvedLmsBucked?: boolean;
-}
+export type IBucketEntity = z.infer<typeof bucketSchema>;
 
 export const bucketSchema = z.object({
   uuid: z.string(),

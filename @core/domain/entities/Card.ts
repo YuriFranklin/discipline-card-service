@@ -1,20 +1,6 @@
 import { z, ZodError } from "zod";
 
-export interface ICardEntity {
-  create?: boolean;
-  planId: string;
-  defaultBucketId: string;
-  solvedBucketId: string;
-  solvedLMSBucketId: string;
-  bucketId: string;
-  title: string;
-  createdDateTime?: Date;
-  dueDateTime: Date;
-  id?: string;
-  appliedCategories?: { [categoryId: string]: boolean } | undefined;
-  assignments?: string[] | undefined;
-  checklist?: ICheckItem[] | undefined;
-}
+export type ICardEntity = z.infer<typeof cardSchema>;
 
 export interface ICheckItem {
   id: string;
@@ -56,20 +42,20 @@ export const cardSchema = z.object({
   solvedLMSBucketId: z.string(),
 });
 
-export default class Card implements ICardEntity {
-  create?: boolean;
-  planId: string;
-  defaultBucketId: string;
-  solvedBucketId: string;
-  solvedLMSBucketId: string;
-  bucketId: string;
-  title: string;
-  createdDateTime?: Date;
-  dueDateTime: Date;
-  id?: string;
-  appliedCategories?: { [categoryId: string]: boolean } | undefined;
-  assignments?: string[] | undefined;
-  checklist?: ICheckItem[] | undefined;
+export default class Card {
+  private create?: boolean;
+  private planId: string;
+  private defaultBucketId: string;
+  private solvedBucketId: string;
+  private solvedLMSBucketId: string;
+  private bucketId: string;
+  private title: string;
+  private createdDateTime?: Date;
+  private dueDateTime: Date;
+  private id?: string;
+  private appliedCategories?: { [categoryId: string]: boolean } | undefined;
+  private assignments?: string[] | undefined;
+  private checklist?: ICheckItem[] | undefined;
 
   private constructor(props: ICardEntity) {
     const {
@@ -136,18 +122,22 @@ export default class Card implements ICardEntity {
     );
   }
 
-  toJSON(): ICardEntity {
+  toJSON(): ICardEntity | { dueDateTime: string; createdDateTime?: string } {
     return {
       planId: this.planId,
       bucketId: this.bucketId,
       title: this.title,
-      createdDateTime: this.createdDateTime,
-      dueDateTime: this.dueDateTime,
-      id: this.id,
-      appliedCategories: this.appliedCategories,
-      assignments: this.assignments,
-      checklist: this.checklist,
-      create: this.create,
+      ...(this.createdDateTime && {
+        createdDateTime: this.createdDateTime.toISOString(),
+      }),
+      dueDateTime: this.dueDateTime.toISOString(),
+      ...(this.id && { id: this.id }),
+      ...(this.appliedCategories && {
+        appliedCategories: this.appliedCategories,
+      }),
+      ...(this.assignments?.length && { assignments: this.assignments }),
+      ...(this.checklist?.length && { checklist: this.checklist }),
+      ...(this.create !== undefined && { create: this.create }),
       defaultBucketId: this.defaultBucketId,
       solvedBucketId: this.solvedBucketId,
       solvedLMSBucketId: this.solvedLMSBucketId,

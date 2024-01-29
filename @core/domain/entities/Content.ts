@@ -7,14 +7,9 @@ const isValidStatus = (value: any): value is ContentEntityStatus => {
   return [STATUS.MISSING, STATUS.OK, STATUS.NOT_APPLICABLE].includes(value);
 };
 
-export interface IContentEntity {
-  uuid: string;
-  columnName: string;
-  title: string;
-  plannerUuid?: string;
-  bucketUuid?: string;
+export type IContentEntity = z.infer<typeof contentSchema> & {
   status?: ContentEntityStatus;
-}
+};
 
 export const contentSchema = z.object({
   uuid: z.string(),
@@ -29,13 +24,13 @@ export const contentSchema = z.object({
     .optional(),
 });
 
-export default class Content implements IContentEntity {
-  uuid: string;
-  columnName: string;
-  title: string;
-  plannerUuid?: string | undefined;
-  bucketUuid?: string | undefined;
-  status?: ContentEntityStatus;
+export default class Content {
+  private uuid: string;
+  private columnName: string;
+  private title: string;
+  private plannerUuid?: string | undefined;
+  private bucketUuid?: string | undefined;
+  private status?: ContentEntityStatus;
 
   private constructor(props: IContentEntity) {
     const { uuid, columnName, title, plannerUuid, bucketUuid, status } = props;
@@ -66,9 +61,9 @@ export default class Content implements IContentEntity {
       uuid: this.uuid,
       columnName: this.columnName,
       title: this.title,
-      plannerUuid: this.plannerUuid,
-      bucketUuid: this.bucketUuid,
-      status: this.status,
+      ...(this.plannerUuid && { plannerUuid: this.plannerUuid }),
+      ...(this.bucketUuid && { bucketUuid: this.bucketUuid }),
+      ...(this.status && { status: this.status }),
     };
   }
 }

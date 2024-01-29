@@ -1,12 +1,7 @@
 import { ZodError, z } from "zod";
 import crypto from "crypto";
 
-export interface ITagEntity {
-  uuid: string;
-  name: string;
-  apiId: string;
-  obs?: string;
-}
+export type ITagEntity = z.infer<typeof tagSchema>;
 
 export const tagSchema = z.object({
   uuid: z.string().optional(),
