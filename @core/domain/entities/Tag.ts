@@ -1,4 +1,5 @@
 import { ZodError, z } from "zod";
+import crypto from "crypto";
 
 export interface ITagEntity {
   uuid: string;
@@ -8,7 +9,7 @@ export interface ITagEntity {
 }
 
 export const tagSchema = z.object({
-  uuid: z.string(),
+  uuid: z.string().optional(),
   name: z.string(),
   apiId: z.string(),
   obs: z.string().optional(),
@@ -20,15 +21,15 @@ export default class Tag implements ITagEntity {
   apiId: string;
   obs?: string | undefined;
 
-  constructor(props: ITagEntity) {
+  constructor(props: Optional<ITagEntity, "uuid">) {
     const { uuid, name, apiId, obs } = props;
-    this.uuid = uuid;
+    this.uuid = uuid || crypto.randomUUID();
     this.name = name;
     this.apiId = apiId;
     this.obs = obs;
   }
 
-  public static create(data: ITagEntity): Tag {
+  public static create(data: Optional<ITagEntity, "uuid">): Tag {
     try {
       tagSchema.parse(data);
       return new Tag(data);
