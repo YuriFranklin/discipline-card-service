@@ -90,7 +90,7 @@ export default class Card implements ICardEntity {
 
     this.planId = planId;
     this.title = title;
-    this.createdDateTime = createdDateTime;
+    this.createdDateTime = createdDateTime || new Date();
     this.dueDateTime = dueDateTime;
     this.id = id;
     this.appliedCategories = appliedCategories;

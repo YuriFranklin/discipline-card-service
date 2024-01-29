@@ -1,14 +1,27 @@
 import { STATUS } from "../constants/Status";
+import Agent, { IAgentEntity } from "../entities/Agent";
 import Card, { ICardEntity } from "../entities/Card";
 import { IContentEntity } from "../entities/Content";
 import Master, { IMasterEntity } from "../entities/Master";
 import Planner, { IPlannerEntity } from "../entities/Planner";
+import { IProjectEntity } from "../entities/Project";
+import { IPublisherEntity } from "../entities/Publisher";
 
 export default class UpsertMasterCardsService {
-  public execute(planners: Planner[], master: Master, cards?: Card[]): Master {
+  public execute({
+    master,
+    planners,
+    cards,
+    agents,
+  }: {
+    planners: Planner[];
+    master: Master;
+    cards?: Card[];
+    agents: Agent[];
+  }): Master {
     const masterAsJSON = master.toJSON();
     const plannersAsJSON = planners.map((planner) => planner.toJSON());
-
+    const agentsAsJSON = agents.map((agent) => agent.toJSON());
     if (cards) {
       let upsertedCards: ICardEntity[] = [];
 
@@ -20,7 +33,13 @@ export default class UpsertMasterCardsService {
         if (!findedCard) return upsertedCards.push(card.toJSON());
 
         upsertedCards.push(
-          this.compareAndUpdateCard(findedCard, card.toJSON())
+          this.compareAndUpdateCard({
+            agents,
+            currentCard: card,
+            master: masterAsJSON,
+            oldCard: findedCard,
+            planners,
+          })
         );
       });
 
@@ -36,7 +55,13 @@ export default class UpsertMasterCardsService {
         (card) => card.planId === contentsByPlannerId.plannerId
       );
 
-      if (card) return this.updateCard(masterAsJSON, planners, card);
+      if (card)
+        return this.updateCard({
+          master: masterAsJSON,
+          planners,
+          card,
+          agents: agentsAsJSON,
+        });
 
       return this.createCard(
         masterAsJSON,
@@ -51,40 +76,33 @@ export default class UpsertMasterCardsService {
     });
   }
 
-  private compareCardChecklistWithContentsAndUpdate(
-    card: ICardEntity,
-    contentsPlanner: { plannerId: string; contents: IContentEntity[] }
-  ): ICardEntity {
-    throw new Error("method not implemented yet");
-  }
-
-  /*   private getMissingContentsByPlanner(master: IMasterEntity): {
-    plannerId: string;
-    contents: IContentEntity[];
-  }[] {
-    const plannerIds = this.getContentsPlannerIds(master.contents ?? []);
-
-    const missingContents = this.getMissingContents(master.contents ?? []);
-
-    const structuredContentsByPlanner = plannerIds.map((plannerId) => ({
-      plannerId,
-      contents: missingContents?.filter(
-        (content) => content.plannerUuid === plannerId
-      ),
-    }));
-
-    return structuredContentsByPlanner ?? [];
-  } */
-
   private getMissingContents(contents: IContentEntity[]) {
     return contents?.filter((content) => content?.status === STATUS.MISSING);
   }
 
-  private compareAndUpdateCard(
-    oldCard: ICardEntity,
-    currentCard: ICardEntity
-  ): ICardEntity {
-    throw new Error("method not implemented yet");
+  private compareAndUpdateCard({
+    agents,
+    currentCard,
+    master,
+    oldCard,
+    planners,
+  }: {
+    master: IMasterEntity;
+    oldCard: ICardEntity;
+    currentCard: ICardEntity;
+    agents: IAgentEntity[];
+    planners: IPlannerEntity[];
+  }): ICardEntity {
+    const updatedChecklist = currentCard.checklist || [];
+
+    const updatedCard = this.updateCard({
+      agents,
+      card: { ...oldCard, checklist: updatedChecklist },
+      master,
+      planners,
+    });
+
+    return updatedCard;
   }
 
   private createCard(
@@ -95,11 +113,17 @@ export default class UpsertMasterCardsService {
     throw new Error("method not implemented yet");
   }
 
-  private updateCard(
-    master: IMasterEntity,
-    planners: IPlannerEntity[],
-    card: ICardEntity
-  ): ICardEntity {
+  private updateCard({
+    agents,
+    card,
+    master,
+    planners,
+  }: {
+    master: IMasterEntity;
+    planners: IPlannerEntity[];
+    card: ICardEntity;
+    agents: IAgentEntity[];
+  }): ICardEntity {
     const planner = planners.find((planner) => planner.uuid === card.planId);
 
     if (!planner) throw new Error(`Planner not found for card ${card.id}`);
@@ -121,9 +145,43 @@ export default class UpsertMasterCardsService {
         return startDateA.getTime() - startDateB.getTime();
       });
 
+    if (!sortedProjects)
+      throw new Error(`Card ${card.id} doesn't have project.`);
+
+    const project = sortedProjects[0];
+
+    const appliedCategories = this.getCategories({
+      master,
+      project,
+      publisher: master.productionPublisher,
+    });
+
+    const dueDateTime = sortedProjects?.length
+      ? this.getProjectDueDate(project)
+      : new Date();
+
+    const buckets = this.getBuckets({
+      contents: master.contents || [],
+      master,
+      planner,
+      card,
+    });
+
+    const assignments = this.getAssignments({
+      projects: sortedProjects,
+      planner,
+      agents,
+    });
+
     return {
       ...card,
+      ...buckets,
+      appliedCategories,
       title: `[PENDÊNCIA] [${master.uuid}] ${master.discipline}`,
+      create: false,
+      checklist,
+      dueDateTime,
+      assignments,
     };
   }
 
@@ -218,5 +276,135 @@ export default class UpsertMasterCardsService {
     }));
 
     return contentsAsPlannerIds;
+  }
+
+  private getCategories({
+    master,
+    project,
+    publisher,
+  }: {
+    master: IMasterEntity;
+    project?: IProjectEntity;
+    publisher?: IPublisherEntity;
+  }): { [categoryId: string]: boolean } | undefined {
+    const appliedCategories: { [categoryId: string]: boolean } = {};
+
+    project &&
+      project.tags?.forEach((tag) => {
+        appliedCategories[tag.apiId] = true;
+      });
+
+    publisher &&
+      publisher.tags.forEach((tag) => {
+        appliedCategories[tag.apiId] = true;
+      });
+
+    if (!Object.keys(appliedCategories).length) return undefined;
+
+    return appliedCategories;
+  }
+
+  private getProjectDueDate(project: IProjectEntity): Date {
+    return project.startDate || new Date();
+  }
+
+  private getBuckets({
+    planner,
+    master,
+    contents,
+    card,
+  }: {
+    planner: IPlannerEntity;
+    master: IMasterEntity;
+    contents: IContentEntity[];
+    card?: ICardEntity;
+  }): {
+    isSolvedBucked: string;
+    defaultBucketId: string;
+    solvedLMSBucketId: string;
+    bucketId: string;
+  } {
+    const bucketNames = [
+      "isSolvedBucked",
+      "defaultBucketId",
+      "solvedLMSBucketId",
+    ];
+
+    const buckets: Record<(typeof bucketNames)[number], string> =
+      bucketNames.reduce((acc, bucketName) => {
+        const plannerBucket = planner[bucketName];
+
+        if (!plannerBucket) {
+          throw new Error(
+            `Planner ${planner.uuid} doesn't have ${bucketName}.`
+          );
+        }
+
+        acc[bucketName] = plannerBucket;
+        return acc;
+      }, {} as Record<(typeof bucketNames)[number], string>);
+
+    const missingContents = this.getMissingContents(contents);
+
+    const cardBucketId = card?.bucketId;
+
+    let bucketId = buckets.defaultBucketId;
+
+    if (missingContents.length > 1) bucketId = buckets.defaultBucketId;
+
+    if (
+      !missingContents.length &&
+      (cardBucketId !== buckets.solvedLMSBucketId ||
+        cardBucketId !== buckets.isSolvedBucked)
+    )
+      bucketId = buckets.solvedLMSBucketId;
+
+    if (missingContents.length === 1 && missingContents[0].bucketUuid)
+      bucketId = missingContents[0].bucketUuid;
+
+    return { ...buckets, bucketId } as {
+      isSolvedBucked: string;
+      defaultBucketId: string;
+      solvedLMSBucketId: string;
+      bucketId: string;
+    };
+  }
+
+  private getAssignments({
+    projects,
+    agents,
+    planner,
+  }: {
+    projects: IProjectEntity[];
+    agents: IAgentEntity[];
+    planner: IPlannerEntity;
+  }) {
+    const currentDate = new Date();
+
+    const filteredProjects = projects.filter(
+      (project) => !project.startDate || project.startDate <= currentDate
+    );
+
+    const projectsAgents = (filteredProjects
+      .filter((project) => project.agents !== undefined)
+      .flatMap((project) => project.agents) || []) as IAgentEntity[];
+
+    const includeInAllPlannerAgents = agents.filter(
+      (agent) => agent.includeOnAllCardsPlanner
+    );
+
+    const includeInThisPlanner = agents.filter((agent) =>
+      agent.plannersToInclude?.some(
+        (plannerUuid) => plannerUuid === planner.uuid
+      )
+    );
+
+    const assignments = [
+      ...projectsAgents,
+      ...includeInAllPlannerAgents,
+      ...includeInThisPlanner,
+    ].map((agent) => agent.uuid);
+
+    return assignments;
   }
 }

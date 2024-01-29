@@ -1,6 +1,14 @@
 import { ZodError, z } from "zod";
 
-export interface IAgentEntity extends z.infer<typeof agentSchema> {}
+export interface IAgentEntity {
+  uuid: string;
+  alias: string;
+  name: string;
+  email: string;
+  isLeader: boolean;
+  includeOnAllCardsPlanner?: boolean;
+  plannersToInclude?: string[];
+}
 
 export const agentSchema = z.object({
   uuid: z.string(),
