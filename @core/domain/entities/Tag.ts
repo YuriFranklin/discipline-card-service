@@ -15,13 +15,13 @@ export const tagSchema = z.object({
   obs: z.string().optional(),
 });
 
-export default class Tag implements ITagEntity {
-  uuid: string;
-  name: string;
-  apiId: string;
-  obs?: string | undefined;
+export default class Tag {
+  private uuid: string;
+  private name: string;
+  private apiId: string;
+  private obs?: string | undefined;
 
-  constructor(props: Optional<ITagEntity, "uuid">) {
+  private constructor(props: Optional<ITagEntity, "uuid">) {
     const { uuid, name, apiId, obs } = props;
     this.uuid = uuid || crypto.randomUUID();
     this.name = name;
@@ -48,7 +48,7 @@ export default class Tag implements ITagEntity {
       uuid: this.uuid,
       name: this.name,
       apiId: this.apiId,
-      obs: this.obs,
+      ...(this.obs && { obs: this.obs }),
     };
   }
 }

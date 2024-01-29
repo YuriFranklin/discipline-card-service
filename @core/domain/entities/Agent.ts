@@ -20,14 +20,14 @@ export const agentSchema = z.object({
   plannersToInclude: z.array(z.string()).optional(),
 });
 
-export default class Agent implements IAgentEntity {
-  uuid: string;
-  alias: string;
-  name: string;
-  email: string;
-  isLeader: boolean;
-  includeOnAllCardsPlanner?: boolean | undefined;
-  plannersToInclude?: string[] | undefined;
+export default class Agent {
+  private uuid: string;
+  private alias: string;
+  private name: string;
+  private email: string;
+  private isLeader: boolean;
+  private includeOnAllCardsPlanner?: boolean | undefined;
+  private plannersToInclude?: string[] | undefined;
 
   private constructor(props: IAgentEntity) {
     const {
@@ -72,8 +72,12 @@ export default class Agent implements IAgentEntity {
       name: this.name,
       email: this.email,
       isLeader: this.isLeader,
-      includeOnAllCardsPlanner: this.includeOnAllCardsPlanner,
-      plannersToInclude: this.plannersToInclude,
+      ...(this.includeOnAllCardsPlanner && {
+        includeOnAllCardsPlanner: this.includeOnAllCardsPlanner,
+      }),
+      ...(this.plannersToInclude && {
+        plannersToInclude: this.plannersToInclude,
+      }),
     };
   }
 }

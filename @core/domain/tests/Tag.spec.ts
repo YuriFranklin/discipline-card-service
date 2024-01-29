@@ -1,6 +1,6 @@
 import Tag, { ITagEntity } from "../entities/Tag";
 
-describe("UpsertMasterCardService Tests", () => {
+describe("Tag Tests", () => {
   it("Should create a new Tag", () => {
     const tagProperties: Optional<ITagEntity, "uuid"> = {
       apiId: "category2",

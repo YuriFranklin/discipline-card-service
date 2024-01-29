@@ -16,12 +16,12 @@ export const bucketSchema = z.object({
   isSolvedLmsBucked: z.boolean().optional(),
 });
 
-export default class Bucket implements IBucketEntity {
-  uuid: string;
-  name: string;
-  isDefault?: boolean | undefined;
-  isSolvedBucked?: boolean | undefined;
-  isSolvedLmsBucked?: boolean | undefined;
+export default class Bucket {
+  private uuid: string;
+  private name: string;
+  private isDefault?: boolean | undefined;
+  private isSolvedBucked?: boolean | undefined;
+  private isSolvedLmsBucked?: boolean | undefined;
 
   private constructor(props: IBucketEntity) {
     const { uuid, name, isDefault, isSolvedBucked, isSolvedLmsBucked } = props;
