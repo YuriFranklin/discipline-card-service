@@ -3,7 +3,7 @@ import Tag, { tagSchema } from "./Tag";
 import Agent, { agentSchema } from "./Agent";
 import Chat, { chatSchema } from "./Chat";
 
-export type IProjectEntity = z.infer<typeof projectSchema>;
+export type IProjectEntity = z.infer<typeof projectSchema> & { module: string };
 
 const refineModule = (value: string) =>
   typeof value === "string" && (value.length === 1 || value.length === 2);
@@ -79,7 +79,7 @@ export default class Project {
     }
   }
 
-  public toJSON(): IProjectEntity | { startDate?: string; endDate?: string } {
+  public toJSON() {
     return {
       uuid: this.uuid,
       name: this.name,

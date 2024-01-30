@@ -6,7 +6,9 @@ import Project, { projectSchema } from "./Project";
 import Card, { cardSchema } from "./Card";
 import { STATUS } from "../constants/Status";
 
-export type IMasterEntity = z.infer<typeof masterSchema>;
+export type IMasterEntity = z.infer<typeof masterSchema> & {
+  contents?: IContentEntity[];
+};
 
 const masterSchema = z.object({
   discipline: z.string(),
@@ -122,20 +124,35 @@ export default class Master {
     return undefined;
   }
 
-  public toJSON(): Omit<IMasterEntity, 'cards' | 'projects'> & { cards?: Omit<ReturnType<Card['toJSON']>, 'createdDateTime' | 'dueDateTime'>[], projects?: ReturnType<Project['toJSON']>[] } {
+  public toJSON(): Omit<IMasterEntity, "cards" | "projects"> & {
+    cards?: ReturnType<Card["toJSON"]>[];
+    projects?: ReturnType<Project["toJSON"]>[];
+  } {
     return {
       discipline: this.discipline,
-      ...(this.equivalences && {equivalences: this.equivalences}),
-      ...(this.masterPublisher && {masterPublisher: this.masterPublisher.toJSON()}),
-      ...(this.productionPublisher && {productionPublisher: this.productionPublisher?.toJSON()}),
+      ...(this.equivalences && { equivalences: this.equivalences }),
+      ...(this.masterPublisher && {
+        masterPublisher: this.masterPublisher.toJSON(),
+      }),
+      ...(this.productionPublisher && {
+        productionPublisher: this.productionPublisher?.toJSON(),
+      }),
       isFirstPeriod: this.isFirstPeriod,
-      ...(this.masterId && {masterId: this.masterId}),
-      ...(this.uuid && {uuid: this.uuid}),
-      semester: this.semester,  
-      ...(this.contents?.length && {contents: this.contents?.map((content) => content.toJSON())}),
-      ...(this.projects?.length && {projects: this.projects?.map((project) => project.toJSON())}),
-      ...(this.agents?.length && {agents: this.agents?.map((agent) => agent.toJSON())}),
-      ...(this.cards?.length && {cards: this.cards?.map((card) => card.toJSON())}),
+      ...(this.masterId && { masterId: this.masterId }),
+      ...(this.uuid && { uuid: this.uuid }),
+      semester: this.semester,
+      ...(this.contents?.length && {
+        contents: this.contents?.map((content) => content.toJSON()),
+      }),
+      ...(this.projects?.length && {
+        projects: this.projects?.map((project) => project.toJSON()),
+      }),
+      ...(this.agents?.length && {
+        agents: this.agents?.map((agent) => agent.toJSON()),
+      }),
+      ...(this.cards?.length && {
+        cards: this.cards?.map((card) => card.toJSON()),
+      }),
       status: this.getStatus(),
     };
   }

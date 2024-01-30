@@ -122,7 +122,7 @@ export default class Card {
     );
   }
 
-  public toJSON(): Omit<ICardEntity, 'dueDateTime' | 'createdDateTime'> & { dueDateTime: string; createdDateTime?: string }  {
+  public toJSON() {
     return {
       planId: this.planId,
       bucketId: this.bucketId,

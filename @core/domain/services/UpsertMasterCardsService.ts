@@ -1,7 +1,7 @@
 import { STATUS } from "../constants/Status";
 import Agent, { IAgentEntity } from "../entities/Agent";
-import Card, { ICardEntity } from "../entities/Card";
-import { IContentEntity } from "../entities/Content";
+import Card from "../entities/Card";
+import Content, { IContentEntity } from "../entities/Content";
 import Master, { IMasterEntity } from "../entities/Master";
 import Planner, { IPlannerEntity } from "../entities/Planner";
 import { IProjectEntity } from "../entities/Project";
@@ -22,32 +22,55 @@ export default class UpsertMasterCardsService {
     const masterAsJSON = master.toJSON();
     const plannersAsJSON = planners.map((planner) => planner.toJSON());
     const agentsAsJSON = agents.map((agent) => agent.toJSON());
+    const cardsAsJSON = cards?.map((card) => card.toJSON());
     if (cards) {
-      let upsertedCards: ICardEntity[] = [];
+      let upsertedCards: ReturnType<Card["toJSON"]>[] = [];
 
-      cards?.forEach((card) => {
+      cardsAsJSON?.forEach((card) => {
         const findedCard = masterAsJSON.cards?.find(
           (masterStoredCard) => masterStoredCard.id === card.id
         );
 
-        if (!findedCard) return upsertedCards.push(card.toJSON());
+        if (!findedCard) return upsertedCards.push(card);
 
         upsertedCards.push(
           this.compareAndUpdateCard({
-            agents,
+            agents: agentsAsJSON,
             currentCard: card,
             master: masterAsJSON,
             oldCard: findedCard,
-            planners,
+            planners: plannersAsJSON,
           })
         );
       });
 
-      return Master.create({ ...masterAsJSON, cards: upsertedCards });
+      const upsertedCardsFormatted = upsertedCards.map((card) => ({
+        ...card,
+        dueDateTime: new Date(card.dueDateTime),
+        createdDateTime:
+          card?.createdDateTime === typeof "string"
+            ? new Date(card?.createdDateTime)
+            : undefined,
+      }));
+
+      const projects: IProjectEntity[] =
+        masterAsJSON.projects?.map((project) => ({
+          ...project,
+          startDate: project?.startDate
+            ? new Date(project?.startDate)
+            : undefined,
+          endDate: project?.endDate ? new Date(project?.endDate) : undefined,
+        })) || [];
+
+      return Master.create({
+        ...masterAsJSON,
+        cards: upsertedCardsFormatted,
+        projects,
+      });
     }
 
     const contentsByPlannersIds = this.getContentsByPlannerIds(
-      master.contents || []
+      masterAsJSON.contents || []
     );
 
     const upsertedCards = contentsByPlannersIds.map((contentsByPlannerId) => {
@@ -58,7 +81,7 @@ export default class UpsertMasterCardsService {
       if (card)
         return this.updateCard({
           master: masterAsJSON,
-          planners,
+          planners: plannersAsJSON,
           card,
           agents: agentsAsJSON,
         });
@@ -72,7 +95,18 @@ export default class UpsertMasterCardsService {
 
     return Master.create({
       ...masterAsJSON,
-      cards: upsertedCards,
+      projects: masterAsJSON.projects?.map((project) => ({
+        ...project,
+        startDate: project?.startDate ? new Date(project.startDate) : undefined,
+        endDate: project?.endDate ? new Date(project.endDate) : undefined,
+      })),
+      cards: upsertedCards.map((card) => ({
+        ...card,
+        dueDateTime: new Date(card.dueDateTime),
+        createdDateTime: card?.createdDateTime
+          ? new Date(card.createdDateTime)
+          : undefined,
+      })),
     });
   }
 
@@ -87,12 +121,12 @@ export default class UpsertMasterCardsService {
     oldCard,
     planners,
   }: {
-    master: IMasterEntity;
-    oldCard: ICardEntity;
-    currentCard: ICardEntity;
+    master: ReturnType<Master["toJSON"]>;
+    oldCard: ReturnType<Card["toJSON"]>;
+    currentCard: ReturnType<Card["toJSON"]>;
     agents: IAgentEntity[];
-    planners: IPlannerEntity[];
-  }): ICardEntity {
+    planners: ReturnType<Planner["toJSON"]>[];
+  }): ReturnType<Card["toJSON"]> {
     const updatedChecklist = currentCard.checklist || [];
 
     const updatedCard = this.updateCard({
@@ -106,10 +140,10 @@ export default class UpsertMasterCardsService {
   }
 
   private createCard(
-    master: IMasterEntity,
-    planners: IPlannerEntity[],
+    master: ReturnType<Master["toJSON"]>,
+    planners: ReturnType<Planner["toJSON"]>[],
     contents: IContentEntity[]
-  ): ICardEntity {
+  ): ReturnType<Card["toJSON"]> {
     throw new Error("method not implemented yet");
   }
 
@@ -119,11 +153,11 @@ export default class UpsertMasterCardsService {
     master,
     planners,
   }: {
-    master: IMasterEntity;
+    master: ReturnType<Master["toJSON"]>;
     planners: IPlannerEntity[];
-    card: ICardEntity;
-    agents: IAgentEntity[];
-  }): ICardEntity {
+    card: ReturnType<Card["toJSON"]>;
+    agents: ReturnType<Agent["toJSON"]>[];
+  }): ReturnType<Card["toJSON"]> {
     const planner = planners.find((planner) => planner.uuid === card.planId);
 
     if (!planner) throw new Error(`Planner not found for card ${card.id}`);
@@ -186,8 +220,8 @@ export default class UpsertMasterCardsService {
   }
 
   private upsertChecklist(
-    master: IMasterEntity,
-    card: ICardEntity,
+    master: ReturnType<Master["toJSON"]>,
+    card: ReturnType<Card["toJSON"]>,
     planner: IPlannerEntity
   ) {
     const defaultBucketId = planner.buckets?.find(
@@ -261,7 +295,7 @@ export default class UpsertMasterCardsService {
     return [...updatedCardCheckItems, ...newCheckItems];
   }
 
-  private getContentsByPlannerIds(contents: IContentEntity[]) {
+  private getContentsByPlannerIds(contents: ReturnType<Content["toJSON"]>[]) {
     const plannerIds =
       contents?.reduce((planners, card) => {
         if (card.plannerUuid) {
@@ -317,7 +351,7 @@ export default class UpsertMasterCardsService {
     planner: IPlannerEntity;
     master: IMasterEntity;
     contents: IContentEntity[];
-    card?: ICardEntity;
+    card?: ReturnType<Card["toJSON"]>;
   }): {
     isSolvedBucked: string;
     defaultBucketId: string;
