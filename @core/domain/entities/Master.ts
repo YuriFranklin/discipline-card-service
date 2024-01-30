@@ -122,20 +122,20 @@ export default class Master {
     return undefined;
   }
 
-  public toJSON(): IMasterEntity {
+  public toJSON(): IMasterEntity | {cards: ReturnType<Card['toJSON']> } {
     return {
       discipline: this.discipline,
-      equivalences: this.equivalences,
-      masterPublisher: this.masterPublisher?.toJSON(),
-      productionPublisher: this.productionPublisher?.toJSON(),
+      ...(this.equivalences && {equivalences: this.equivalences}),
+      ...(this.masterPublisher && {masterPublisher: this.masterPublisher.toJSON()}),
+      ...(this.productionPublisher && {productionPublisher: this.productionPublisher?.toJSON()}),
       isFirstPeriod: this.isFirstPeriod,
-      masterId: this.masterId,
-      uuid: this.uuid,
-      semester: this.semester,
-      contents: this.contents?.map((content) => content.toJSON()),
-      projects: this.projects?.map((project) => project.toJSON()),
-      agents: this.agents?.map((agent) => agent.toJSON()),
-      cards: this.cards?.map((card) => card.toJSON()),
+      ...(this.masterId && {masterId: this.masterId}),
+      ...(this.uuid && {uuid: this.uuid}),
+      semester: this.semester,  
+      ...(this.contents?.length && {contents: this.contents?.map((content) => content.toJSON())}),
+      //...(this.projects?.length && {projects: this.projects?.map((project) => project.toJSON())}),
+      ...(this.agents?.length && {agents: this.agents?.map((agent) => agent.toJSON())}),
+      ...(this.cards?.length && {cards: this.cards?.map((card) => card.toJSON())}),
       status: this.getStatus(),
     };
   }

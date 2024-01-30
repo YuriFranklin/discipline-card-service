@@ -122,7 +122,7 @@ export default class Card {
     );
   }
 
-  toJSON(): ICardEntity | { dueDateTime: string; createdDateTime?: string } {
+  public toJSON(): ICardEntity & { dueDateTime: string; createdDateTime?: string }  {
     return {
       planId: this.planId,
       bucketId: this.bucketId,
