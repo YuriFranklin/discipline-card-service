@@ -122,7 +122,7 @@ export default class Master {
     return undefined;
   }
 
-  public toJSON(): IMasterEntity | {cards: ReturnType<Card['toJSON']> } {
+  public toJSON(): Omit<IMasterEntity, 'cards' | 'projects'> & { cards?: Omit<ReturnType<Card['toJSON']>, 'createdDateTime' | 'dueDateTime'>[], projects?: ReturnType<Project['toJSON']>[] } {
     return {
       discipline: this.discipline,
       ...(this.equivalences && {equivalences: this.equivalences}),
@@ -133,7 +133,7 @@ export default class Master {
       ...(this.uuid && {uuid: this.uuid}),
       semester: this.semester,  
       ...(this.contents?.length && {contents: this.contents?.map((content) => content.toJSON())}),
-      //...(this.projects?.length && {projects: this.projects?.map((project) => project.toJSON())}),
+      ...(this.projects?.length && {projects: this.projects?.map((project) => project.toJSON())}),
       ...(this.agents?.length && {agents: this.agents?.map((agent) => agent.toJSON())}),
       ...(this.cards?.length && {cards: this.cards?.map((card) => card.toJSON())}),
       status: this.getStatus(),
