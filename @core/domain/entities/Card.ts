@@ -5,7 +5,7 @@ export type ICardEntity = z.infer<typeof cardSchema>;
 export interface ICheckItem {
   id: string;
   notifiedDate?: Date;
-  contentUuid: string;
+  contentUuid?: string;
   bucketId: string;
   value: {
     title: string;
@@ -28,7 +28,7 @@ export const cardSchema = z.object({
       z.object({
         id: z.string(),
         notifiedDate: z.date().optional(),
-        contentUuid: z.string(),
+        contentUuid: z.string().optional(),
         bucketId: z.string(),
         value: z.object({
           title: z.string(),
@@ -40,6 +40,7 @@ export const cardSchema = z.object({
   defaultBucketId: z.string(),
   solvedBucketId: z.string(),
   solvedLMSBucketId: z.string(),
+  chatsUuid: z.array(z.string()).optional(),
 });
 
 export default class Card {
@@ -56,6 +57,7 @@ export default class Card {
   private appliedCategories?: { [categoryId: string]: boolean } | undefined;
   private assignments?: string[] | undefined;
   private checklist?: ICheckItem[] | undefined;
+  private chatsUuid?: string[] | undefined;
 
   private constructor(props: ICardEntity) {
     const {
@@ -72,6 +74,7 @@ export default class Card {
       defaultBucketId,
       solvedBucketId,
       solvedLMSBucketId,
+      chatsUuid,
     } = props;
 
     this.planId = planId;
@@ -86,6 +89,7 @@ export default class Card {
     this.defaultBucketId = defaultBucketId;
     this.solvedBucketId = solvedBucketId;
     this.solvedLMSBucketId = solvedLMSBucketId;
+    this.chatsUuid = chatsUuid;
 
     if (this.isAllItemsChecked()) {
       this.bucketId = this.solvedBucketId;
@@ -133,7 +137,7 @@ export default class Card {
       dueDateTime: this.dueDateTime.toISOString(),
       ...(this.id && { id: this.id }),
       ...(this.appliedCategories && {
-        appliedCategories: this.appliedCategories,
+        appliedCategories: this.appliedCategories || {},
       }),
       ...(this.assignments?.length && { assignments: this.assignments }),
       ...(this.checklist?.length && { checklist: this.checklist }),
@@ -141,6 +145,7 @@ export default class Card {
       defaultBucketId: this.defaultBucketId,
       solvedBucketId: this.solvedBucketId,
       solvedLMSBucketId: this.solvedLMSBucketId,
+      ...(this.chatsUuid?.length && { chatsUuid: this.chatsUuid }),
     };
   }
 }

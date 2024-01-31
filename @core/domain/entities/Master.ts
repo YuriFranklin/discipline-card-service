@@ -113,7 +113,10 @@ export default class Master {
       return STATUS.INCOMPLETE;
     }
 
-    if (okContents.length + notApplicableContents.length === totalContents) {
+    if (
+      totalContents &&
+      okContents.length + notApplicableContents.length === totalContents
+    ) {
       return STATUS.OK;
     }
 
@@ -153,7 +156,7 @@ export default class Master {
       ...(this.cards?.length && {
         cards: this.cards?.map((card) => card.toJSON()),
       }),
-      status: this.getStatus(),
+      ...(this.status && { status: this.getStatus() }),
     };
   }
 }

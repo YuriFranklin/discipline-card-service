@@ -1,11 +1,11 @@
 import { STATUS } from "../constants/Status";
 import Agent, { IAgentEntity } from "../entities/Agent";
-import Card from "../entities/Card";
+import Card, { ICardEntity } from "../entities/Card";
 import Content, { IContentEntity } from "../entities/Content";
-import Master, { IMasterEntity } from "../entities/Master";
+import Master from "../entities/Master";
 import Planner, { IPlannerEntity } from "../entities/Planner";
-import { IProjectEntity } from "../entities/Project";
-import { IPublisherEntity } from "../entities/Publisher";
+import Project, { IProjectEntity } from "../entities/Project";
+import Publisher from "../entities/Publisher";
 
 export default class UpsertMasterCardsService {
   public execute({
@@ -23,35 +23,38 @@ export default class UpsertMasterCardsService {
     const plannersAsJSON = planners.map((planner) => planner.toJSON());
     const agentsAsJSON = agents.map((agent) => agent.toJSON());
     const cardsAsJSON = cards?.map((card) => card.toJSON());
+
+    if (!masterAsJSON.uuid)
+      throw new Error(
+        `Cannot upsertcards because ${masterAsJSON.discipline} doesn't have uuid.`
+      );
+
     if (cards) {
-      let upsertedCards: ReturnType<Card["toJSON"]>[] = [];
+      let upsertedCards: ICardEntity[] = [];
 
       cardsAsJSON?.forEach((card) => {
         const findedCard = masterAsJSON.cards?.find(
           (masterStoredCard) => masterStoredCard.id === card.id
         );
 
-        if (!findedCard) return upsertedCards.push(card);
+        if (!findedCard)
+          return upsertedCards.push({
+            ...card,
+            dueDateTime: new Date(card.dueDateTime),
+            createdDateTime: card?.createdDateTime
+              ? new Date(card.createdDateTime)
+              : undefined,
+          });
 
         upsertedCards.push(
-          this.compareAndUpdateCard({
+          this.updateCard({
             agents: agentsAsJSON,
-            currentCard: card,
+            card,
             master: masterAsJSON,
-            oldCard: findedCard,
             planners: plannersAsJSON,
           })
         );
       });
-
-      const upsertedCardsFormatted = upsertedCards.map((card) => ({
-        ...card,
-        dueDateTime: new Date(card.dueDateTime),
-        createdDateTime:
-          card?.createdDateTime === typeof "string"
-            ? new Date(card?.createdDateTime)
-            : undefined,
-      }));
 
       const projects: IProjectEntity[] =
         masterAsJSON.projects?.map((project) => ({
@@ -64,7 +67,7 @@ export default class UpsertMasterCardsService {
 
       return Master.create({
         ...masterAsJSON,
-        cards: upsertedCardsFormatted,
+        cards: upsertedCards,
         projects,
       });
     }
@@ -86,10 +89,20 @@ export default class UpsertMasterCardsService {
           agents: agentsAsJSON,
         });
 
+      const planner = plannersAsJSON.find(
+        (planner) => planner.uuid === contentsByPlannerId.plannerId
+      );
+
+      if (!planner)
+        throw new Error(
+          `Planner with id ${contentsByPlannerId.plannerId} not found.`
+        );
+
       return this.createCard(
         masterAsJSON,
-        plannersAsJSON,
-        contentsByPlannerId.contents
+        planner,
+        contentsByPlannerId.contents,
+        agentsAsJSON
       );
     });
 
@@ -114,37 +127,64 @@ export default class UpsertMasterCardsService {
     return contents?.filter((content) => content?.status === STATUS.MISSING);
   }
 
-  private compareAndUpdateCard({
-    agents,
-    currentCard,
-    master,
-    oldCard,
-    planners,
-  }: {
-    master: ReturnType<Master["toJSON"]>;
-    oldCard: ReturnType<Card["toJSON"]>;
-    currentCard: ReturnType<Card["toJSON"]>;
-    agents: IAgentEntity[];
-    planners: ReturnType<Planner["toJSON"]>[];
-  }): ReturnType<Card["toJSON"]> {
-    const updatedChecklist = currentCard.checklist || [];
-
-    const updatedCard = this.updateCard({
-      agents,
-      card: { ...oldCard, checklist: updatedChecklist },
-      master,
-      planners,
-    });
-
-    return updatedCard;
-  }
-
   private createCard(
     master: ReturnType<Master["toJSON"]>,
-    planners: ReturnType<Planner["toJSON"]>[],
-    contents: IContentEntity[]
-  ): ReturnType<Card["toJSON"]> {
-    throw new Error("method not implemented yet");
+    planner: ReturnType<Planner["toJSON"]>,
+    contents: IContentEntity[],
+    agents: ReturnType<Agent["toJSON"]>[]
+  ): ICardEntity {
+    const today = new Date();
+
+    const sortedProjects = master?.projects
+      ?.filter((project) => {
+        const projectStartDate = project.startDate
+          ? new Date(project.startDate)
+          : new Date();
+        return projectStartDate <= today;
+      })
+      .sort((a, b) => {
+        const startDateA = a.startDate ? new Date(a.startDate) : new Date();
+        const startDateB = b.startDate ? new Date(b.startDate) : new Date();
+        return startDateA.getTime() - startDateB.getTime();
+      });
+
+    const project = sortedProjects?.[0];
+
+    const appliedCategories = this.getCategories({
+      master,
+      project,
+      publisher: master.productionPublisher,
+    });
+
+    const dueDateTime = project ? this.getProjectDueDate(project) : new Date();
+
+    const buckets = this.getBuckets({
+      contents,
+      master,
+      planner,
+    });
+
+    const assignments = this.getAssignments({
+      projects: sortedProjects,
+      planner,
+      agents,
+    });
+
+    const checklist = this.upsertChecklist({ master, planner, contents });
+
+    const chatsUuid = project?.chats?.map((chat) => chat.uuid);
+
+    return {
+      ...buckets,
+      appliedCategories,
+      title: `[PENDÊNCIA] [${master.uuid}] ${master.discipline}`,
+      create: true,
+      dueDateTime: dueDateTime,
+      assignments,
+      planId: planner.uuid,
+      checklist,
+      chatsUuid,
+    };
   }
 
   private updateCard({
@@ -154,15 +194,15 @@ export default class UpsertMasterCardsService {
     planners,
   }: {
     master: ReturnType<Master["toJSON"]>;
-    planners: IPlannerEntity[];
+    planners: ReturnType<Planner["toJSON"]>[];
     card: ReturnType<Card["toJSON"]>;
     agents: ReturnType<Agent["toJSON"]>[];
-  }): ReturnType<Card["toJSON"]> {
+  }): ICardEntity {
     const planner = planners.find((planner) => planner.uuid === card.planId);
 
     if (!planner) throw new Error(`Planner not found for card ${card.id}`);
 
-    const checklist = this.upsertChecklist(master, card, planner);
+    const checklist = this.upsertChecklist({ master, card, planner });
 
     const today = new Date();
 
@@ -179,10 +219,7 @@ export default class UpsertMasterCardsService {
         return startDateA.getTime() - startDateB.getTime();
       });
 
-    if (!sortedProjects)
-      throw new Error(`Card ${card.id} doesn't have project.`);
-
-    const project = sortedProjects[0];
+    const project = sortedProjects?.[0];
 
     const appliedCategories = this.getCategories({
       master,
@@ -190,9 +227,7 @@ export default class UpsertMasterCardsService {
       publisher: master.productionPublisher,
     });
 
-    const dueDateTime = sortedProjects?.length
-      ? this.getProjectDueDate(project)
-      : new Date();
+    const dueDateTime = project ? this.getProjectDueDate(project) : new Date();
 
     const buckets = this.getBuckets({
       contents: master.contents || [],
@@ -207,6 +242,8 @@ export default class UpsertMasterCardsService {
       agents,
     });
 
+    const chatsUuid = project?.chats?.map((chat) => chat.uuid);
+
     return {
       ...card,
       ...buckets,
@@ -214,16 +251,26 @@ export default class UpsertMasterCardsService {
       title: `[PENDÊNCIA] [${master.uuid}] ${master.discipline}`,
       create: false,
       checklist,
-      dueDateTime,
+      dueDateTime: dueDateTime,
       assignments,
+      createdDateTime: card.createdDateTime
+        ? new Date(card.createdDateTime)
+        : undefined,
+      chatsUuid,
     };
   }
 
-  private upsertChecklist(
-    master: ReturnType<Master["toJSON"]>,
-    card: ReturnType<Card["toJSON"]>,
-    planner: IPlannerEntity
-  ) {
+  private upsertChecklist({
+    card,
+    master,
+    planner,
+    contents,
+  }: {
+    master: ReturnType<Master["toJSON"]>;
+    card?: ReturnType<Card["toJSON"]>;
+    planner: IPlannerEntity;
+    contents?: IContentEntity[];
+  }) {
     const defaultBucketId = planner.buckets?.find(
       (bucket) => bucket.isDefault
     )?.uuid;
@@ -231,13 +278,14 @@ export default class UpsertMasterCardsService {
     if (!defaultBucketId)
       throw new Error(`Planner hasn't a default bucket ${planner.uuid}`);
 
-    const contents = master.contents?.filter(
-      (content) => content.plannerUuid === card.planId
-    );
+    const masterContentsOrParam =
+      master.contents?.filter(
+        (content) => content.plannerUuid === card?.planId
+      ) || contents;
 
     const updatedCardCheckItems =
-      card.checklist?.map((checkItem) => {
-        const checkItemContent = contents?.find(
+      card?.checklist?.map((checkItem) => {
+        const checkItemContent = masterContentsOrParam?.find(
           (content) => content.uuid === checkItem.contentUuid
         );
 
@@ -268,17 +316,17 @@ export default class UpsertMasterCardsService {
           ...checkItem,
           value: {
             ...checkItem.value,
-            title: `${checkItem.value.title} (Item não localizado)`,
+            title: `${checkItem.value.title} (Conteúdo não localizado)`,
             isChecked: true,
           },
         };
       }) || [];
 
     const newCheckItems =
-      contents
+      masterContentsOrParam
         ?.filter(
           (content) =>
-            !card.checklist?.some(
+            !card?.checklist?.some(
               (checkItem) => checkItem.contentUuid === content.uuid
             ) && content.status === STATUS.MISSING
         )
@@ -317,9 +365,9 @@ export default class UpsertMasterCardsService {
     project,
     publisher,
   }: {
-    master: IMasterEntity;
-    project?: IProjectEntity;
-    publisher?: IPublisherEntity;
+    master: ReturnType<Master["toJSON"]>;
+    project?: ReturnType<Project["toJSON"]>;
+    publisher?: ReturnType<Publisher["toJSON"]>;
   }): { [categoryId: string]: boolean } | undefined {
     const appliedCategories: { [categoryId: string]: boolean } = {};
 
@@ -338,8 +386,8 @@ export default class UpsertMasterCardsService {
     return appliedCategories;
   }
 
-  private getProjectDueDate(project: IProjectEntity): Date {
-    return project.startDate || new Date();
+  private getProjectDueDate(project: ReturnType<Project["toJSON"]>): Date {
+    return project.startDate ? new Date(project.startDate) : new Date();
   }
 
   private getBuckets({
@@ -348,35 +396,43 @@ export default class UpsertMasterCardsService {
     contents,
     card,
   }: {
-    planner: IPlannerEntity;
-    master: IMasterEntity;
-    contents: IContentEntity[];
+    planner: ReturnType<Planner["toJSON"]>;
+    master: ReturnType<Master["toJSON"]>;
+    contents: ReturnType<Content["toJSON"]>[];
     card?: ReturnType<Card["toJSON"]>;
   }): {
-    isSolvedBucked: string;
+    solvedBucketId: string;
     defaultBucketId: string;
     solvedLMSBucketId: string;
     bucketId: string;
   } {
-    const bucketNames = [
-      "isSolvedBucked",
-      "defaultBucketId",
-      "solvedLMSBucketId",
-    ];
+    const buckets = [
+      {
+        bucketEntityKeyFlag: "isDefault",
+        cardEntityKeyValue: "defaultBucketId",
+      },
+      {
+        bucketEntityKeyFlag: "isSolvedBucked",
+        cardEntityKeyValue: "solvedBucketId",
+      },
+      {
+        bucketEntityKeyFlag: "isSolvedLmsBucked",
+        cardEntityKeyValue: "solvedLMSBucketId",
+      },
+    ].reduce((acc, bucket) => {
+      const findedPlannerBucket = planner.buckets?.find(
+        (plannerBucket) => plannerBucket[bucket.bucketEntityKeyFlag] === true
+      )?.uuid;
 
-    const buckets: Record<(typeof bucketNames)[number], string> =
-      bucketNames.reduce((acc, bucketName) => {
-        const plannerBucket = planner[bucketName];
+      if (!findedPlannerBucket) {
+        throw new Error(
+          `Planner ${planner.uuid} doesn't have ${bucket.bucketEntityKeyFlag}.`
+        );
+      }
 
-        if (!plannerBucket) {
-          throw new Error(
-            `Planner ${planner.uuid} doesn't have ${bucketName}.`
-          );
-        }
-
-        acc[bucketName] = plannerBucket;
-        return acc;
-      }, {} as Record<(typeof bucketNames)[number], string>);
+      acc[bucket.cardEntityKeyValue] = findedPlannerBucket;
+      return acc;
+    }, {} as { [key: string]: string });
 
     const missingContents = this.getMissingContents(contents);
 
@@ -388,16 +444,16 @@ export default class UpsertMasterCardsService {
 
     if (
       !missingContents.length &&
-      (cardBucketId !== buckets.solvedLMSBucketId ||
-        cardBucketId !== buckets.isSolvedBucked)
+      (cardBucketId !== buckets.solvedBucketId ||
+        cardBucketId !== buckets.solvedLMSBucketId)
     )
-      bucketId = buckets.solvedLMSBucketId;
+      bucketId = buckets.solvedBucketId;
 
     if (missingContents.length === 1 && missingContents[0].bucketUuid)
       bucketId = missingContents[0].bucketUuid;
 
     return { ...buckets, bucketId } as {
-      isSolvedBucked: string;
+      solvedBucketId: string;
       defaultBucketId: string;
       solvedLMSBucketId: string;
       bucketId: string;
@@ -409,15 +465,17 @@ export default class UpsertMasterCardsService {
     agents,
     planner,
   }: {
-    projects: IProjectEntity[];
-    agents: IAgentEntity[];
-    planner: IPlannerEntity;
+    projects?: ReturnType<Project["toJSON"]>[];
+    agents: ReturnType<Agent["toJSON"]>[];
+    planner: ReturnType<Planner["toJSON"]>;
   }) {
     const currentDate = new Date();
 
-    const filteredProjects = projects.filter(
-      (project) => !project.startDate || project.startDate <= currentDate
-    );
+    const filteredProjects =
+      projects?.filter(
+        (project) =>
+          !project.startDate || new Date(project.startDate) <= currentDate
+      ) || [];
 
     const projectsAgents = (filteredProjects
       .filter((project) => project.agents !== undefined)
