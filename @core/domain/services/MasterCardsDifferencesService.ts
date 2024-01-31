@@ -21,11 +21,39 @@ export default class MasterCardsDifferencesService {
           )
         : [];
 
-    return [...newCardsNotifies];
+    const cardTitleUpdatedNotifies =
+      currentCards && oldCards
+        ? this.getCardsTitleUpdatedAndGenerateNotifies(
+            currentMasterAsJSON,
+            currentCards,
+            oldCards
+          )
+        : [];
+
+    return [...newCardsNotifies, ...cardTitleUpdatedNotifies];
   }
 
-  private cardTitleUpdated(): MasterNotification | undefined {
-    throw new Error("Method not implemented.");
+  private getCardsTitleUpdatedAndGenerateNotifies(
+    master: ReturnType<Master["toJSON"]>,
+    currentCards: ReturnType<Card["toJSON"]>[],
+    oldCards?: ReturnType<Card["toJSON"]>[]
+  ): MasterNotification[] {
+    return currentCards
+      .filter(
+        (card) =>
+          !oldCards?.some(
+            (oldCard) => oldCard.id === card.id && card.title !== oldCard.title
+          )
+      )
+      .map((card) =>
+        MasterNotification.create({
+          masterUUID: master.uuid || "123",
+          message: `O título de um dos cards foi ajustado para ${card.title}.`,
+          agentsUuid: card.assignments,
+          chatsUuid: card.chatsUuid,
+          code: NOTIFICATION_CODE.MASTER_CARD_TITLE_UPDATED,
+        })
+      );
   }
 
   private getNewCardsAndGenerateNotifies(
