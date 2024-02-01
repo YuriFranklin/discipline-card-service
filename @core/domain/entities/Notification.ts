@@ -16,6 +16,7 @@ export const notificationSchema = z
     messageCode: z.nativeEnum(NOTIFICATION_CODE),
     agent: agentSchema.optional(),
     chat: chatSchema.optional(),
+    message: z.string().optional(),
   })
   .refine((data) => data.agent !== undefined || data.chat !== undefined, {
     message: "At least one of agent or chat must be present",
@@ -26,13 +27,15 @@ export default class Notification {
   private messageCode: NOTIFICATION_CODE;
   private agent: Agent | undefined;
   private chat: Chat | undefined;
+  private message: string | undefined;
 
   protected constructor(props: Optional<INotificationEntity, "uuid">) {
-    const { uuid, agent, chat, messageCode } = props;
+    const { uuid, agent, chat, messageCode, message } = props;
     this.uuid = uuid || crypto.randomUUID();
     this.agent = agent && Agent.create(agent);
     this.chat = chat && Chat.create(chat);
     this.messageCode = messageCode;
+    this.message = message;
   }
 
   public static create(
@@ -95,6 +98,7 @@ export default class Notification {
         ...variables,
         AGENTNAME: agent?.name,
         CHATNAME: chat?.name,
+        ...(this.message && { MESSAGE: this.message }),
       }),
     };
   }
