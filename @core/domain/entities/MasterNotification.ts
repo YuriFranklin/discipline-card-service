@@ -1,22 +1,23 @@
 import { z, ZodError } from "zod";
 import Notification, { notificationSchema } from "./Notification";
+import Master, { IMasterEntity, masterSchema } from "./Master";
 
 export type IMasterNotificationEntity = z.infer<
   typeof masterNotificationSchema
->;
+> & { master: IMasterEntity };
 
 const masterNotificationSchema = notificationSchema.and(
   z.object({
-    masterUUID: z.string(),
+    master: masterSchema,
   })
 );
 
 export default class MasterNotification extends Notification {
-  private masterUUID: string;
+  private master: Master;
 
   private constructor(props: IMasterNotificationEntity) {
     super(props);
-    this.masterUUID = props.masterUUID;
+    this.master = Master.create(props.master);
   }
 
   public static create(data: IMasterNotificationEntity): MasterNotification {
@@ -33,10 +34,14 @@ export default class MasterNotification extends Notification {
     }
   }
 
-  public toJSON(): IMasterNotificationEntity {
+  public toJSON() {
+    const master = this.master.toJSON();
+
     return {
-      ...super.toJSON(),
-      masterUUID: this.masterUUID,
+      ...super.prepareToJSON({
+        DISCIPLINE: master.discipline,
+      }),
+      masterUUID: master.uuid,
     };
   }
 }

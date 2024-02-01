@@ -10,7 +10,7 @@ export type IMasterEntity = z.infer<typeof masterSchema> & {
   contents?: IContentEntity[];
 };
 
-const masterSchema = z.object({
+export const masterSchema = z.object({
   discipline: z.string(),
   equivalences: z.array(z.string()).optional(),
   masterPublisher: publisherSchema.optional(),

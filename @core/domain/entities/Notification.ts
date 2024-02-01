@@ -1,38 +1,38 @@
 import { ZodError, z } from "zod";
 import crypto from "crypto";
-import { NOTIFICATION_CODE } from "../constants/Notification";
+import {
+  MessageTemplate,
+  NOTIFICATION_CODE,
+  NOTIFICATION_MESSAGES,
+} from "../constants/Notification";
+import Agent, { agentSchema } from "./Agent";
+import Chat, { chatSchema } from "./Chat";
 
 export type INotificationEntity = z.infer<typeof notificationSchema>;
 
 export const notificationSchema = z
   .object({
     uuid: z.string().optional(),
-    message: z.string(),
-    agentsUuid: z.array(z.string()).optional(),
-    chatsUuid: z.array(z.string()).optional(),
-    code: z.nativeEnum(NOTIFICATION_CODE),
+    messageCode: z.nativeEnum(NOTIFICATION_CODE),
+    agent: agentSchema.optional(),
+    chat: chatSchema.optional(),
   })
-  .refine(
-    (data) => data.agentsUuid !== undefined || data.chatsUuid !== undefined,
-    {
-      message: "At least one of agentsUuid or chatsUuid must be present",
-    }
-  );
+  .refine((data) => data.agent !== undefined || data.chat !== undefined, {
+    message: "At least one of agent or chat must be present",
+  });
 
 export default class Notification {
   private uuid: string;
-  private message: string;
-  private agentsUuid?: string[] | undefined;
-  private chatsUuid?: string[] | undefined;
-  private code: NOTIFICATION_CODE;
+  private messageCode: NOTIFICATION_CODE;
+  private agent: Agent | undefined;
+  private chat: Chat | undefined;
 
   protected constructor(props: Optional<INotificationEntity, "uuid">) {
-    const { uuid, message, agentsUuid, chatsUuid, code } = props;
+    const { uuid, agent, chat, messageCode } = props;
     this.uuid = uuid || crypto.randomUUID();
-    this.message = message;
-    this.agentsUuid = agentsUuid;
-    this.chatsUuid = chatsUuid;
-    this.code = code;
+    this.agent = agent && Agent.create(agent);
+    this.chat = chat && Chat.create(chat);
+    this.messageCode = messageCode;
   }
 
   public static create(
@@ -51,13 +51,55 @@ export default class Notification {
     }
   }
 
-  public toJSON(): INotificationEntity {
+  private formatMessage(
+    template: MessageTemplate,
+    variables: Record<string, any>
+  ): {
+    complete: string;
+    reduced: string;
+  } {
     return {
-      code: this.code,
-      uuid: this.uuid,
-      message: this.message,
-      ...(this.agentsUuid && { agentsUuid: this.agentsUuid }),
-      ...(this.chatsUuid && { chatsUuid: this.chatsUuid }),
+      complete: this.injectVariablesIntoMessage(template.complete, variables),
+      reduced: this.injectVariablesIntoMessage(template.reduced, variables),
     };
+  }
+
+  private injectVariablesIntoMessage(
+    message: string,
+    variables: Record<string, any>
+  ): string {
+    return Object.entries(variables).reduce(
+      (formattedMessage, [key, value]) => {
+        const placeholder = new RegExp(`\\{${key}\\}`, "g");
+        return formattedMessage.replace(placeholder, value || "N/A");
+      },
+      message
+    );
+  }
+
+  protected prepareToJSON(variables?: { [key: string]: any }) {
+    const messageTemplate = NOTIFICATION_MESSAGES[this.messageCode];
+    const agent = this.agent?.toJSON();
+    const chat = this.chat?.toJSON();
+
+    if (!messageTemplate)
+      throw new Error(
+        `Message template for code ${this.messageCode} not found.`
+      );
+
+    return {
+      uuid: this.uuid,
+      ...(agent && { agent }),
+      ...(chat && { chat }),
+      messages: this.formatMessage(messageTemplate, {
+        ...variables,
+        AGENTNAME: agent?.name,
+        CHATNAME: chat?.name,
+      }),
+    };
+  }
+
+  public toJSON() {
+    return this.prepareToJSON();
   }
 }
