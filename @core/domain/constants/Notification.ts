@@ -3,9 +3,11 @@ export enum NOTIFICATION_CODE {
   MASTER_CARD_UPDATED = 1,
   MASTER_CARD_DELETED = 2,
   MASTER_CARD_TITLE_UPDATED = 3,
-  MASTER_CARD_CHECKLIST_UPDATED = 4,
+  MASTER_CARD_CHECKLIST_ITEM_CHECKED = 4,
   AGGREGATED = 5,
 }
+
+export const NOTIFY_DAYS = [0, 1, 3, 5];
 
 export type MessageTemplate = {
   complete: string;
@@ -19,9 +21,9 @@ type NotificationMessages = {
 export const NOTIFICATION_MESSAGES: NotificationMessages = {
   [NOTIFICATION_CODE.MASTER_CARD_CREATED]: {
     complete: `<h1>Olá, <strong>{AGENTNAME}</strong>,</h1><br>
-    <p>Realizamos a criação do card da disciplina {DISCIPLINE || 'N/A'}.</p><br><br>
+    <p>Realizamos a criação do card da disciplina {DISCIPLINE}.</p><br><br>
     <p>Gentileza, verificar o status no planner.</p>`,
-    reduced: `Novo card criado`,
+    reduced: `Novo card {CARDTITLE} criado.`,
   },
   [NOTIFICATION_CODE.AGGREGATED]: {
     complete: `{MESSAGE}`,
@@ -29,8 +31,8 @@ export const NOTIFICATION_MESSAGES: NotificationMessages = {
   },
   [NOTIFICATION_CODE.MASTER_CARD_TITLE_UPDATED]: {
     complete: `<h1>Olá, <strong>{AGENTNAME}</strong>,</h1><br>
-    <p>Realizamos a alteração no título do card da disciplina <strong>{DISCIPLINE || 'N/A'}</strong>.</p><br><br>
+    <p>Realizamos alteração no título do card {CARDTITLE}.</p><br><br>
     <p>Gentileza, verificar no planner.</p>`,
-    reduced: `Título do card atualizado`,
+    reduced: `Título do card atualizado.`,
   },
 };

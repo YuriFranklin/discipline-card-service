@@ -1,5 +1,4 @@
 import { ZodError, z } from "zod";
-import crypto from "crypto";
 import {
   MessageTemplate,
   NOTIFICATION_CODE,
@@ -17,6 +16,7 @@ export const notificationSchema = z
     agent: agentSchema.optional(),
     chat: chatSchema.optional(),
     message: z.string().optional(),
+    variables: z.record(z.any()).optional(),
   })
   .refine((data) => data.agent !== undefined || data.chat !== undefined, {
     message: "At least one of agent or chat must be present",
@@ -28,14 +28,16 @@ export default class Notification {
   private agent: Agent | undefined;
   private chat: Chat | undefined;
   private message: string | undefined;
+  private variables: Record<string, any>;
 
   protected constructor(props: Optional<INotificationEntity, "uuid">) {
-    const { uuid, agent, chat, messageCode, message } = props;
+    const { uuid, agent, chat, messageCode, message, variables } = props;
     this.uuid = uuid || crypto.randomUUID();
     this.agent = agent && Agent.create(agent);
     this.chat = chat && Chat.create(chat);
     this.messageCode = messageCode;
     this.message = message;
+    this.variables = variables || {};
   }
 
   public static create(
@@ -71,7 +73,20 @@ export default class Notification {
     message: string,
     variables: Record<string, any>
   ): string {
-    return Object.entries(variables).reduce(
+    if (this.message) return this.message;
+
+    const templateKeys = new Set(
+      message.match(/\{([^}]+)\}/g)?.map((match) => match.slice(1, -1)) || []
+    );
+
+    const filteredVariables: Record<string, any> = {};
+    Object.keys(variables).forEach((key) => {
+      if (templateKeys.has(key)) {
+        filteredVariables[key] = variables[key];
+      }
+    });
+
+    return Object.entries(filteredVariables).reduce(
       (formattedMessage, [key, value]) => {
         const placeholder = new RegExp(`\\{${key}\\}`, "g");
         return formattedMessage.replace(placeholder, value || "N/A");
@@ -80,7 +95,7 @@ export default class Notification {
     );
   }
 
-  protected prepareToJSON(variables?: { [key: string]: any }) {
+  protected prepareToJSON() {
     const messageTemplate = NOTIFICATION_MESSAGES[this.messageCode];
     const agent = this.agent?.toJSON();
     const chat = this.chat?.toJSON();
@@ -95,7 +110,7 @@ export default class Notification {
       ...(agent && { agent }),
       ...(chat && { chat }),
       messages: this.formatMessage(messageTemplate, {
-        ...variables,
+        ...this.variables,
         AGENTNAME: agent?.name,
         CHATNAME: chat?.name,
         ...(this.message && { MESSAGE: this.message }),

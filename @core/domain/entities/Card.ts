@@ -27,7 +27,8 @@ export const cardSchema = z.object({
     .array(
       z.object({
         id: z.string(),
-        notifiedDate: z.date().optional(),
+        firstNotificationDate: z.date().optional(),
+        lastNotificationDate: z.date().optional(),
         contentUuid: z.string().optional(),
         bucketId: z.string(),
         value: z.object({
