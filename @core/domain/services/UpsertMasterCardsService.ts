@@ -40,6 +40,9 @@ export default class UpsertMasterCardsService {
         if (!findedCard)
           return upsertedCards.push({
             ...card,
+            lastUpdate: card?.lastUpdate
+              ? new Date(card.lastUpdate)
+              : undefined,
             dueDateTime: new Date(card.dueDateTime),
             createdDateTime: card?.createdDateTime
               ? new Date(card.createdDateTime)
@@ -184,6 +187,7 @@ export default class UpsertMasterCardsService {
       planId: planner.uuid,
       checklist,
       chatsUuid,
+      lastUpdate: new Date(),
     };
   }
 
@@ -253,6 +257,7 @@ export default class UpsertMasterCardsService {
       checklist,
       dueDateTime: dueDateTime,
       assignments,
+      lastUpdate: new Date(),
       createdDateTime: card.createdDateTime
         ? new Date(card.createdDateTime)
         : undefined,

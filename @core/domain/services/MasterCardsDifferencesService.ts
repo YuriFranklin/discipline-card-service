@@ -3,12 +3,15 @@ import Master from "../entities/Master";
 import { IAgentEntity } from "../entities/Agent";
 import Project from "../entities/Project";
 import Notification from "../entities/Notification";
-import { NOTIFICATION_CODE } from "../constants/Notification";
+import { NOTIFICATION_CODE, NOTIFY_DAYS } from "../constants/Notification";
 
 const today = new Date();
 
 export default class MasterCardsDifferencesService {
-  public execute(currentMaster: Master, oldMaster: Master): Notification[] {
+  public execute(
+    currentMaster: Master,
+    oldMaster: Master
+  ): { master: Master; notifications: Notification[] } {
     const currentMasterAsJSON = currentMaster.toJSON();
     const oldCards = oldMaster.toJSON().cards;
     const currentCards = currentMasterAsJSON.cards;
@@ -31,7 +34,35 @@ export default class MasterCardsDifferencesService {
           )
         : [];
 
-    return [...newCardsNotifies, ...cardTitleUpdatedNotifies];
+    const updatedMasterCardsChecklistAndNotifies =
+      this.getCardsChecklistUpdatesAndGenerateNotifies(currentMasterAsJSON);
+
+    const notifications = [
+      ...newCardsNotifies,
+      ...cardTitleUpdatedNotifies,
+      ...updatedMasterCardsChecklistAndNotifies.notifications,
+    ];
+
+    const master = Master.create({
+      ...currentMasterAsJSON,
+      projects: currentMasterAsJSON.projects?.map((project) => ({
+        ...project,
+        startDate: project?.startDate ? new Date(project.startDate) : undefined,
+        endDate: project?.endDate ? new Date(project.endDate) : undefined,
+      })),
+      cards: updatedMasterCardsChecklistAndNotifies.master?.cards?.map(
+        (card) => ({
+          ...card,
+          dueDateTime: new Date(card.dueDateTime),
+          createdDateTime: card?.createdDateTime
+            ? new Date(card.createdDateTime)
+            : undefined,
+          lastUpdate: card?.lastUpdate ? new Date(card.lastUpdate) : undefined,
+        })
+      ),
+    });
+
+    return { notifications, master };
   }
 
   private getCardsTitleUpdatedAndGenerateNotifies(
@@ -151,5 +182,93 @@ export default class MasterCardsDifferencesService {
             })
         ) || []
     );
+  }
+
+  private getCardsChecklistUpdatesAndGenerateNotifies(
+    master: ReturnType<Master["toJSON"]>
+  ): { master: ReturnType<Master["toJSON"]>; notifications: Notification[] } {
+    const cards = master.cards;
+    const projects = this.getMasterProjects(master);
+
+    if (!cards?.length) return { master, notifications: [] };
+
+    const notifications: Notification[] = [];
+
+    const cardsUpdated = cards.map((card) => {
+      const checklist = card.checklist?.map((checkitem) => {
+        const daysNotified = this.daysNotified(
+          checkitem.firstNotificationDate,
+          checkitem.lastNotificationDate
+        );
+
+        if (daysNotified === undefined) return checkitem;
+
+        const content = master.contents?.find(
+          (content) => content.uuid === checkitem.contentUuid
+        );
+
+        if (!content) return checkitem;
+
+        daysNotified === 0
+          ? this.createNotificationByProject(
+              projects,
+              NOTIFICATION_CODE.MASTER_CARD_CHECKLIST_ITEM_CHECKED,
+              { CARDTITLE: card.title, CHECKITEM: content?.columnName }
+            ).forEach((notification) => notifications.push(notification))
+          : this.createNotificationByProject(
+              projects,
+              NOTIFICATION_CODE.MASTER_CARD_CHECKLIST_ITEM_CHECKED_DAYS,
+              {
+                CARDTITLE: card.title,
+                CHECKITEM: content?.columnName,
+                DAYS: daysNotified,
+              }
+            ).forEach((notification) => notifications.push(notification));
+
+        return {
+          ...checkitem,
+          firstNotificationDate: checkitem.firstNotificationDate || today,
+          lastNotificationDate: today,
+        };
+      });
+
+      if (!checklist) return card;
+
+      return { ...card, checklist, lastUpdate: new Date().toISOString() };
+    });
+
+    return { master: { ...master, cards: cardsUpdated }, notifications };
+  }
+
+  private daysNotified(
+    firstDate: Date | undefined,
+    lastDate: Date | undefined
+  ): number | undefined {
+    if (firstDate === undefined) return 0;
+
+    const todayTimestamp = Date.now();
+    const lastNotificationInDays = Math.floor(
+      (todayTimestamp - firstDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    const isLastNotificationMoreThan24Hours =
+      lastDate === undefined ||
+      (todayTimestamp - lastDate.getTime()) / (1000 * 60 * 60) > 24;
+
+    if (
+      NOTIFY_DAYS.includes(lastNotificationInDays) &&
+      isLastNotificationMoreThan24Hours
+    ) {
+      return lastNotificationInDays;
+    }
+
+    if (
+      Math.max(...NOTIFY_DAYS) < lastNotificationInDays &&
+      isLastNotificationMoreThan24Hours
+    ) {
+      return lastNotificationInDays;
+    }
+
+    return undefined;
   }
 }

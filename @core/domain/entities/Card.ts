@@ -4,9 +4,10 @@ export type ICardEntity = z.infer<typeof cardSchema>;
 
 export interface ICheckItem {
   id: string;
-  notifiedDate?: Date;
   contentUuid?: string;
   bucketId: string;
+  firstNotificationDate?: Date;
+  lastNotificationDate?: Date;
   value: {
     title: string;
     isChecked: boolean;
@@ -19,6 +20,7 @@ export const cardSchema = z.object({
   bucketId: z.string().optional(),
   title: z.string(),
   createdDateTime: z.date().optional(),
+  lastUpdate: z.date().optional(),
   dueDateTime: z.date(),
   id: z.string().optional(),
   appliedCategories: z.record(z.boolean()).optional(),
@@ -59,6 +61,7 @@ export default class Card {
   private assignments?: string[] | undefined;
   private checklist?: ICheckItem[] | undefined;
   private chatsUuid?: string[] | undefined;
+  private lastUpdate?: Date | undefined;
 
   private constructor(props: ICardEntity) {
     const {
@@ -76,6 +79,7 @@ export default class Card {
       solvedBucketId,
       solvedLMSBucketId,
       chatsUuid,
+      lastUpdate,
     } = props;
 
     this.planId = planId;
@@ -91,6 +95,7 @@ export default class Card {
     this.solvedBucketId = solvedBucketId;
     this.solvedLMSBucketId = solvedLMSBucketId;
     this.chatsUuid = chatsUuid;
+    this.lastUpdate = lastUpdate;
 
     if (this.isAllItemsChecked()) {
       this.bucketId = this.solvedBucketId;
@@ -134,6 +139,9 @@ export default class Card {
       title: this.title,
       ...(this.createdDateTime && {
         createdDateTime: this.createdDateTime.toISOString(),
+      }),
+      ...(this.lastUpdate && {
+        lastUpdate: this.lastUpdate.toISOString(),
       }),
       dueDateTime: this.dueDateTime.toISOString(),
       ...(this.id && { id: this.id }),
