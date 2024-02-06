@@ -43,9 +43,7 @@ export default class Agent {
 
   public static create(data: IAgentEntity): Agent {
     try {
-      // Valida os dados usando o schema
       agentSchema.parse(data);
-      // Se a validação for bem-sucedida, cria uma instância da classe
       return new Agent(data);
     } catch (error) {
       if (error instanceof ZodError) {

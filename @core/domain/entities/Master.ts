@@ -127,10 +127,7 @@ export default class Master {
     return undefined;
   }
 
-  public toJSON(): Omit<IMasterEntity, "cards" | "projects"> & {
-    cards?: ReturnType<Card["toJSON"]>[];
-    projects?: ReturnType<Project["toJSON"]>[];
-  } {
+  public toJSON() {
     return {
       discipline: this.discipline,
       ...(this.equivalences && { equivalences: this.equivalences }),

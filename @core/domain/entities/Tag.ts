@@ -38,7 +38,7 @@ export default class Tag {
     }
   }
 
-  public toJSON(): ITagEntity {
+  public toJSON() {
     return {
       uuid: this.uuid,
       name: this.name,

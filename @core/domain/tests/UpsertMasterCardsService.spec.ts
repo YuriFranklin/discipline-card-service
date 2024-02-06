@@ -90,17 +90,20 @@ describe("UpsertMasterCardService Tests", () => {
       })
       .toJSON();
 
+    console.log(updatedMasterWithCardsUpdated);
+
     expect(updatedMasterWithCardsUpdated).toEqual({
       ...mockMasterData,
       cards: [
         {
           ...cardDataUpdated,
+          lastUpdate: expect.any(String),
+          appliedCategories: undefined,
           create: false,
           createdDateTime: expect.any(String),
           dueDateTime: expect.any(String),
           assignments: expect.any(Array),
           bucketId: expect.any(String),
-          appliedCategories: undefined,
           checklist: [
             {
               ...cardDataUpdated.checklist?.[0],

@@ -1,18 +1,7 @@
 import { z, ZodError } from "zod";
+import CheckItem, { checkItemSchema } from "./CheckItem";
 
 export type ICardEntity = z.infer<typeof cardSchema>;
-
-export interface ICheckItem {
-  id: string;
-  contentUuid?: string;
-  bucketId: string;
-  firstNotificationDate?: Date;
-  lastNotificationDate?: Date;
-  value: {
-    title: string;
-    isChecked: boolean;
-  };
-}
 
 export const cardSchema = z.object({
   create: z.boolean().optional(),
@@ -25,21 +14,7 @@ export const cardSchema = z.object({
   id: z.string().optional(),
   appliedCategories: z.record(z.boolean()).optional(),
   assignments: z.array(z.string()).optional(),
-  checklist: z
-    .array(
-      z.object({
-        id: z.string(),
-        firstNotificationDate: z.date().optional(),
-        lastNotificationDate: z.date().optional(),
-        contentUuid: z.string().optional(),
-        bucketId: z.string(),
-        value: z.object({
-          title: z.string(),
-          isChecked: z.boolean(),
-        }),
-      })
-    )
-    .optional(),
+  checklist: z.array(checkItemSchema).optional(),
   defaultBucketId: z.string(),
   solvedBucketId: z.string(),
   solvedLMSBucketId: z.string(),
@@ -59,7 +34,7 @@ export default class Card {
   private id?: string;
   private appliedCategories?: { [categoryId: string]: boolean } | undefined;
   private assignments?: string[] | undefined;
-  private checklist?: ICheckItem[] | undefined;
+  private checklist?: CheckItem[] | undefined;
   private chatsUuid?: string[] | undefined;
   private lastUpdate?: Date | undefined;
 
@@ -89,7 +64,7 @@ export default class Card {
     this.id = id;
     this.appliedCategories = appliedCategories;
     this.assignments = assignments;
-    this.checklist = checklist;
+    this.checklist = checklist?.map((checkItem) => CheckItem.create(checkItem));
     this.create = create;
     this.defaultBucketId = defaultBucketId;
     this.solvedBucketId = solvedBucketId;
@@ -101,11 +76,11 @@ export default class Card {
       this.bucketId = this.solvedBucketId;
     } else {
       const uncheckedChecklist = this.checklist?.filter(
-        (checkItem) => !checkItem.value.isChecked
+        (checkItem) => !checkItem.getValue().isChecked
       );
 
       if (uncheckedChecklist?.length === 1) {
-        this.bucketId = uncheckedChecklist[0].bucketId;
+        this.bucketId = uncheckedChecklist[0].toJSON().bucketId;
       } else {
         this.bucketId = bucketId ?? defaultBucketId;
       }
@@ -128,7 +103,8 @@ export default class Card {
 
   private isAllItemsChecked(): boolean {
     return (
-      this.checklist?.every((checkitem) => checkitem.value.isChecked) ?? false
+      this.checklist?.every((checkitem) => checkitem.getValue().isChecked) ??
+      false
     );
   }
 
@@ -149,7 +125,9 @@ export default class Card {
         appliedCategories: this.appliedCategories || {},
       }),
       ...(this.assignments?.length && { assignments: this.assignments }),
-      ...(this.checklist?.length && { checklist: this.checklist }),
+      ...(this.checklist?.length && {
+        checklist: this.checklist.map((checkItem) => checkItem.toJSON()),
+      }),
       ...(this.create !== undefined && { create: this.create }),
       defaultBucketId: this.defaultBucketId,
       solvedBucketId: this.solvedBucketId,

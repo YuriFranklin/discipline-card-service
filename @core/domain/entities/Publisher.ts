@@ -39,7 +39,7 @@ export default class Publisher {
     }
   }
 
-  public toJSON(): IPublisherEntity {
+  public toJSON() {
     return {
       uuid: this.uuid,
       name: this.name,
