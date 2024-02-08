@@ -11,12 +11,13 @@ export default class MasterCardsDifferencesService {
   public execute(
     currentMaster: Master,
     oldMaster: Master
-  ): { master: Master; notifications: Notification[] } {
+  ): { master: Master; notifications: Notification[]; cards?: Card[] } {
+    const cards: Card[] = [];
     const currentMasterAsJSON = currentMaster.toJSON();
     const oldCards = oldMaster.toJSON().cards;
     const currentCards = currentMasterAsJSON.cards;
 
-    const cardTitleUpdatedNotifies =
+    const cardTitleUpdated =
       currentCards && oldCards
         ? this.getCardsTitleUpdatedAndGenerateNotifies(
             currentMasterAsJSON,
@@ -25,7 +26,7 @@ export default class MasterCardsDifferencesService {
           )
         : [];
 
-    const newCardsNotifies =
+    const newCards =
       currentCards && oldCards
         ? this.getNewCardsAndGenerateNotifies(
             currentMasterAsJSON,
@@ -58,28 +59,40 @@ export default class MasterCardsDifferencesService {
             ? new Date(card.createdDateTime)
             : undefined,
           lastUpdate: card?.lastUpdate ? new Date(card.lastUpdate) : undefined,
+          checklist: card.checklist?.map((checkItem) => ({
+            ...checkItem,
+            firstNotificationDate: checkItem.firstNotificationDate
+              ? new Date(checkItem.firstNotificationDate)
+              : undefined,
+            lastNotificationDate: checkItem.lastNotificationDate
+              ? new Date(checkItem.lastNotificationDate)
+              : undefined,
+          })),
         })
       ),
     });
 
-    return { notifications, master };
+    return { notifications, master, ...(cards.length && { cards }) };
   }
 
   private getCardsTitleUpdatedAndGenerateNotifies(
     master: ReturnType<Master["toJSON"]>,
     currentCards: ReturnType<Card["toJSON"]>[],
     oldCards?: ReturnType<Card["toJSON"]>[]
-  ): Notification[] {
+  ): { notifications: Notification[]; cards: Card[] } {
     const projects = this.getMasterProjects(master);
+    const cards: ReturnType<Card["toJSON"]>[] = [];
 
-    return currentCards.flatMap((card) => {
-      const updatedCards = oldCards?.find(
+    const notifications = currentCards.flatMap((card) => {
+      const updatedCard = oldCards?.find(
         (oldCard) => oldCard.id === card.id && card.title !== oldCard.title
       );
 
-      if (!updatedCards) {
+      if (!updatedCard) {
         return [];
       }
+
+      cards.push(card);
 
       return this.createNotificationByProject(
         projects,
@@ -89,6 +102,11 @@ export default class MasterCardsDifferencesService {
         }
       );
     });
+
+    return {
+      notifications,
+      cards: cards.map((card) => this.createCard(card)),
+    };
   }
 
   private getMasterAgents(
@@ -131,11 +149,31 @@ export default class MasterCardsDifferencesService {
     return filteredProjects;
   }
 
+  private createCard(card: ReturnType<Card["toJSON"]>): Card {
+    return Card.create({
+      ...card,
+      dueDateTime: new Date(card.dueDateTime),
+      createdDateTime: card.createdDateTime
+        ? new Date(card.createdDateTime)
+        : undefined,
+      lastUpdate: card.lastUpdate ? new Date(card.lastUpdate) : undefined,
+      checklist: card.checklist?.map((checkItem) => ({
+        ...checkItem,
+        firstNotificationDate: checkItem.firstNotificationDate
+          ? new Date(checkItem.firstNotificationDate)
+          : undefined,
+        lastNotificationDate: checkItem.lastNotificationDate
+          ? new Date(checkItem.lastNotificationDate)
+          : undefined,
+      })),
+    });
+  }
+
   private getNewCardsAndGenerateNotifies(
     master: ReturnType<Master["toJSON"]>,
     currentCards: ReturnType<Card["toJSON"]>[],
     oldCards?: ReturnType<Card["toJSON"]>[]
-  ): Notification[] {
+  ): { notifications: Notification[]; cards: Card[] } {
     const projects = this.getMasterProjects(master);
 
     const filteredNewCards = currentCards.filter(
@@ -143,13 +181,18 @@ export default class MasterCardsDifferencesService {
         !oldCards?.some((oldCard) => oldCard.id === card.id) || card.create
     );
 
-    return filteredNewCards.flatMap((card) =>
+    const notifications = filteredNewCards.flatMap((card) =>
       this.createNotificationByProject(
         projects,
         NOTIFICATION_CODE.MASTER_CARD_CREATED,
         { DISCIPLINE: master.discipline, CARDTITLE: card.title }
       )
     );
+
+    return {
+      notifications,
+      cards: filteredNewCards.map((card) => this.createCard(card)),
+    };
   }
 
   private createNotificationByProject(
@@ -186,28 +229,36 @@ export default class MasterCardsDifferencesService {
 
   private getCardsChecklistUpdatesAndGenerateNotifies(
     master: ReturnType<Master["toJSON"]>
-  ): { master: ReturnType<Master["toJSON"]>; notifications: Notification[] } {
+  ): {
+    master: ReturnType<Master["toJSON"]>;
+    notifications: Notification[];
+    cards: Card[];
+  } {
     const cards = master.cards;
     const projects = this.getMasterProjects(master);
 
-    if (!cards?.length) return { master, notifications: [] };
+    if (!cards?.length) return { master, notifications: [], cards: [] };
 
     const notifications: Notification[] = [];
 
     const cardsUpdated = cards.map((card) => {
-      const checklist = card.checklist?.map((checkitem) => {
+      const checklist = card.checklist?.map((checkItem) => {
         const daysNotified = this.daysNotified(
-          checkitem.firstNotificationDate,
-          checkitem.lastNotificationDate
+          checkItem?.firstNotificationDate
+            ? new Date(checkItem?.firstNotificationDate)
+            : undefined,
+          checkItem?.lastNotificationDate
+            ? new Date(checkItem?.lastNotificationDate)
+            : undefined
         );
 
-        if (daysNotified === undefined) return checkitem;
+        if (daysNotified === undefined) return checkItem;
 
         const content = master.contents?.find(
-          (content) => content.uuid === checkitem.contentUuid
+          (content) => content.uuid === checkItem.contentUuid
         );
 
-        if (!content) return checkitem;
+        if (!content) return checkItem;
 
         daysNotified === 0
           ? this.createNotificationByProject(
@@ -226,9 +277,10 @@ export default class MasterCardsDifferencesService {
             ).forEach((notification) => notifications.push(notification));
 
         return {
-          ...checkitem,
-          firstNotificationDate: checkitem.firstNotificationDate || today,
-          lastNotificationDate: today,
+          ...checkItem,
+          firstNotificationDate:
+            checkItem.firstNotificationDate || today.toISOString(),
+          lastNotificationDate: today.toISOString(),
         };
       });
 

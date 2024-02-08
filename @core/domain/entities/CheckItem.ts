@@ -1,6 +1,7 @@
 import { z, ZodError } from "zod";
 
 export const checkItemSchema = z.object({
+  create: z.boolean(),
   id: z.string(),
   firstNotificationDate: z.date().optional(),
   lastNotificationDate: z.date().optional(),
@@ -16,6 +17,7 @@ export type ICheckItemEntity = z.infer<typeof checkItemSchema>;
 
 export default class CheckItem {
   private id: string;
+  private create: boolean;
   private firstNotificationDate?: Date | undefined;
   private lastNotificationDate?: Date | undefined;
   private contentUuid?: string | undefined;
@@ -62,6 +64,7 @@ export default class CheckItem {
 
   public toJSON() {
     return {
+      create: this.create,
       id: this.id,
       ...(this.firstNotificationDate && {
         firstNotificationDate: this.firstNotificationDate.toISOString(),

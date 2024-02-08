@@ -47,6 +47,15 @@ export default class UpsertMasterCardsService {
             createdDateTime: card?.createdDateTime
               ? new Date(card.createdDateTime)
               : undefined,
+            checklist: card.checklist?.map((checkItem) => ({
+              ...checkItem,
+              firstNotificationDate: checkItem?.firstNotificationDate
+                ? new Date(checkItem?.firstNotificationDate)
+                : undefined,
+              lastNotificationDate: checkItem?.lastNotificationDate
+                ? new Date(checkItem?.lastNotificationDate)
+                : undefined,
+            })),
           });
 
         upsertedCards.push(
@@ -309,6 +318,12 @@ export default class UpsertMasterCardsService {
             bucketId: checkItemContent.bucketUuid || defaultBucketId,
             id: checkItemContent.uuid,
             contentUuid: checkItemContent.uuid,
+            firstNotificationDate: checkItem?.firstNotificationDate
+              ? new Date(checkItem?.firstNotificationDate)
+              : undefined,
+            lastNotificationDate: checkItem?.lastNotificationDate
+              ? new Date(checkItem?.lastNotificationDate)
+              : undefined,
             value: {
               ...checkItem.value,
               title: checkItemContent.title,
@@ -319,11 +334,18 @@ export default class UpsertMasterCardsService {
 
         return {
           ...checkItem,
+          firstNotificationDate: checkItem?.firstNotificationDate
+            ? new Date(checkItem?.firstNotificationDate)
+            : undefined,
+          lastNotificationDate: checkItem?.lastNotificationDate
+            ? new Date(checkItem?.lastNotificationDate)
+            : undefined,
           value: {
             ...checkItem.value,
             title: `${checkItem.value.title} (Conteúdo não localizado)`,
             isChecked: true,
           },
+          create: false,
         };
       }) || [];
 
@@ -336,6 +358,7 @@ export default class UpsertMasterCardsService {
             ) && content.status === STATUS.MISSING
         )
         .map((content) => ({
+          create: true,
           id: content.uuid,
           contentUuid: content.uuid,
           bucketId: content.bucketUuid || defaultBucketId,

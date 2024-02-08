@@ -1,20 +1,54 @@
 import { STATUS } from "@core/domain/constants/Status";
+import Card from "@core/domain/entities/Card";
 import Master from "@core/domain/entities/Master";
+import AgentGatewayInterface from "@core/domain/gateways/AgentGatewayInterface";
 import MasterGatewayInterface from "@core/domain/gateways/MasterGatewayInterface";
+import PlannerGatewayInterface from "@core/domain/gateways/PlannerGatewayInterface";
+import UpsertMasterCardsService from "@core/domain/services/UpsertMasterCardsService";
 
-export default class UpsertMasterUseCase {
-  constructor(private masterGateway: MasterGatewayInterface) {}
+export default class UpsertMasterAndGenerateCardsAndNotificationsUseCase {
+  private static upsertMasterCardService: UpsertMasterCardsService =
+    new UpsertMasterCardsService();
+
+  constructor(
+    private masterRepository: MasterGatewayInterface,
+    private agentRepository: AgentGatewayInterface,
+    private plannerRepository: PlannerGatewayInterface
+  ) {}
 
   public async execute(input: Input): Promise<Output> {
-    const master = Master.create(input);
+    const { master, cards } = input;
 
-    await this.masterGateway.upsert(master);
+    const masterEntity = Master.create(master);
 
-    return master.toJSON();
+    const cardEntities = cards?.map((card) => Card.create(card));
+
+    const planners = await this.plannerRepository.findAll();
+
+    const agents = await this.agentRepository.findAll();
+
+    const upsertedMaster =
+      UpsertMasterAndGenerateCardsAndNotificationsUseCase.upsertMasterCardService.execute(
+        {
+          master: masterEntity,
+          planners,
+          agents,
+          cards: cardEntities,
+        }
+      );
+
+    await this.masterRepository.upsert(upsertedMaster);
+
+    return upsertedMaster.toJSON();
   }
 }
 
 type Input = {
+  master: InputMaster;
+  cards?: InputCard[];
+};
+
+type InputMaster = {
   discipline: string;
   equivalences?: string[];
   masterPublisher?: InputPublisher;
@@ -104,6 +138,7 @@ type InputCard = {
 };
 
 type InputCheckItem = {
+  create: boolean;
   id: string;
   contentUuid?: string;
   bucketId: string;
